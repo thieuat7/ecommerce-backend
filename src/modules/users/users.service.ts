@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@modules/users/entities/user.entity';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -16,9 +17,35 @@ export class UsersService {
     return user ?? undefined;
   }
 
-  // Hàm create vẫn giữ nguyên
+  // Tạo người dùng
   async create(userData: Partial<User>): Promise<User> {
     const newUser = this.userRepository.create(userData);
     return this.userRepository.save(newUser);
+  }
+  // Cập nhật người dùng
+  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với id=${id}`);
+    }
+
+    const updatedUser = this.userRepository.merge(user, updateUserDto);
+    return this.userRepository.save(updatedUser);
+  }
+
+  // Xóa người dùng
+  async remove(id: number): Promise<{ message: string }> {
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với id=${id}`);
+    }
+
+    await this.userRepository.remove(user);
+
+    return {
+      message: 'Xóa người dùng thành công',
+    };
   }
 }
