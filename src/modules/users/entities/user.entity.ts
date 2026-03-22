@@ -35,6 +35,12 @@ export class User {
   })
   password: string;
 
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  current_hashed_refresh_token: string | null;
+
   @CreateDateColumn({
     type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
