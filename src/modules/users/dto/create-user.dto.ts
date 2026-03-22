@@ -1,1 +1,14 @@
-export class CreateUserDto {}
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+
+export class CreateUserDto {
+	@IsEmail({}, { message: 'Email không hợp lệ' })
+	email: string;
+
+	@IsString({ message: 'Tên không hợp lệ' })
+	@IsNotEmpty({ message: 'Tên không được để trống' })
+	name: string;
+
+	@IsString({ message: 'Mật khẩu không hợp lệ' })
+	@MinLength(6, { message: 'Mật khẩu phải ít nhất 6 ký tự' })
+	password: string;
+}
