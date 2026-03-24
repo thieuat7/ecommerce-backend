@@ -32,8 +32,16 @@ export class User {
 
   @Column({
     type: 'text',
+    select: false,
   })
   password: string;
+
+  @Column({
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  current_hashed_refresh_token: string | null;
 
   @CreateDateColumn({
     type: 'timestamp',
