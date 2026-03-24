@@ -28,6 +28,27 @@ export class UsersService {
     return user ?? undefined;
   }
 
+  // Tìm người dùng theo email và lấy cả password
+  async findByEmailWithPassword(email: string): Promise<User | undefined> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.password', 'user.current_hashed_refresh_token'])
+      .where('user.email = :email', { email })
+      .getOne();
+    return user ?? undefined;
+  }
+
+  //Tm tìm người dùng theo id và lấy cả password
+  async findByIdWithPassword(id: number): Promise<User | undefined> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.password', 'user.current_hashed_refresh_token'])
+      .where('user.id = :id', { id })
+      .getOne();
+
+    return user ?? undefined;
+  }
+
   // Tạo người dùng
   async create(userData: Partial<User>): Promise<User> {
     const newUser = this.userRepository.create(userData);
