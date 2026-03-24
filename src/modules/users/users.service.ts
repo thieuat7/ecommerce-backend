@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '@modules/users/entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -11,9 +16,36 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  // 1. Đổi kiểu trả về thành Promise<User | undefined>
+  // Tìm người dùng theo email
   async findByEmail(email: string): Promise<User | undefined> {
     const user = await this.userRepository.findOne({ where: { email } });
+    return user ?? undefined;
+  }
+
+  // Tìm người dùng theo id
+  async findById(id: number): Promise<User | undefined> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    return user ?? undefined;
+  }
+
+  // Tìm người dùng theo email và lấy cả password
+  async findByEmailWithPassword(email: string): Promise<User | undefined> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.password', 'user.current_hashed_refresh_token'])
+      .where('user.email = :email', { email })
+      .getOne();
+    return user ?? undefined;
+  }
+
+  //Tm tìm người dùng theo id và lấy cả password
+  async findByIdWithPassword(id: number): Promise<User | undefined> {
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .addSelect(['user.password', 'user.current_hashed_refresh_token'])
+      .where('user.id = :id', { id })
+      .getOne();
+
     return user ?? undefined;
   }
 
@@ -30,8 +62,48 @@ export class UsersService {
       throw new NotFoundException(`Không tìm thấy người dùng với id=${id}`);
     }
 
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existingUser = await this.findByEmail(updateUserDto.email);
+      if (existingUser && existingUser.id !== id) {
+        throw new BadRequestException('Email này đã được sử dụng!');
+      }
+    }
+
+    if (updateUserDto.password) {
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+    }
+
     const updatedUser = this.userRepository.merge(user, updateUserDto);
     return this.userRepository.save(updatedUser);
+  }
+
+  // Lưu hash của refresh token
+  async setCurrentRefreshToken(
+    currentHashedRefreshToken: string,
+    userId: number,
+  ): Promise<void> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với id=${userId}`);
+    }
+
+    await this.userRepository.update(
+      { id: userId },
+      { current_hashed_refresh_token: currentHashedRefreshToken },
+    );
+  }
+
+  // Xóa hash của refresh token khi đăng xuất
+  async removeRefreshToken(userId: number): Promise<void> {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new NotFoundException(`Không tìm thấy người dùng với id=${userId}`);
+    }
+
+    await this.userRepository.update(
+      { id: userId },
+      { current_hashed_refresh_token: null },
+    );
   }
 
   // Xóa người dùng
