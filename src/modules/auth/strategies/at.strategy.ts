@@ -11,6 +11,7 @@ type AccessTokenPayload = {
 @Injectable()
 export class AtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(configService: ConfigService) {
+    console.log('Strategy Secret:', configService.get('JWT_SECRET'));
     super({
       // 1. Lấy Token từ header Authorization dạng 'Bearer <token>'
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -25,7 +26,6 @@ export class AtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    // Trả về dữ liệu gì thì req.user sẽ chứa dữ liệu đó
-    return { userId: payload.sub, email: payload.email };
+    return { sub: payload.sub, email: payload.email };
   }
 }
