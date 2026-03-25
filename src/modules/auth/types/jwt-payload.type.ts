@@ -3,5 +3,5 @@ export type JwtPayload = {
   email: string;
 };
 
-// Dùng cho Refresh Token Strategy (cần thêm chính chuỗi token để đối soát)
+// Dùng cho Refresh Token Strategy
 export type JwtPayloadWithRt = JwtPayload & { refreshToken: string };
