@@ -1,8 +1,10 @@
+import { Order } from '@modules/orders/entities/order.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('users')
@@ -48,4 +50,7 @@ export class User {
     default: () => 'CURRENT_TIMESTAMP',
   })
   created_at: Date;
+
+  @OneToMany(() => Order, (order) => order.user)
+  orders: Order[];
 }
