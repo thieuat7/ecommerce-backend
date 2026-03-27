@@ -1,26 +1,34 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsNumber,
-  Min,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsInt, Min } from 'class-validator';
+import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 export class CreateProductDto {
+  @ApiProperty({ example: 'iPhone 15 Pro' })
   @IsString()
-  @IsNotEmpty()
   name: string;
 
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @ApiProperty({ example: 'Mô tả sản phẩm...', required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({ example: 1000 })
+  @IsNumber()
   @Min(0)
   price: number;
 
-  @IsNumber()
+  @ApiProperty({ example: 50 })
+  @IsInt()
   @Min(0)
-  stock: number;
+  stockQuantity: number;
 
-  @IsNumber()
-  @Min(0)
+  @ApiProperty({ example: 'https://image.com/product.jpg', required: false })
+  @IsString()
   @IsOptional()
-  locked_stock?: number;
+  imageUrl?: string;
+
+  @ApiProperty({ example: 1 })
+  @IsInt()
+  categoryId: number;
 }
+
+export class UpdateProductDto extends PartialType(CreateProductDto) {}

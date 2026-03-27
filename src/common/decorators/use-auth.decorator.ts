@@ -1,20 +1,25 @@
 import { applyDecorators, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AtGuard } from '@common/guards/at.guard';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorators/roles.decorator';
 
-export function UseAuth() {
+export function UseAuth(...roles: string[]) {
   return applyDecorators(
-    // 1. Kích hoạt Guard để bảo vệ API (Logic)
-    UseGuards(AtGuard),
+    Roles(...roles),
 
-    // 2. Kết nối với cấu hình 'access-token' bạn đã tạo trong Swagger (UI)
+    //Kích hoạt cả AtGuard (xác thực) và RolesGuard (phân quyền)
+    UseGuards(AtGuard, RolesGuard),
+
     ApiBearerAuth('access-token'),
 
-    // 3. (Tùy chọn) Thêm thông báo lỗi mặc định cho Swagger
     ApiResponse({
       status: 401,
       description: 'Chưa xác thực hoặc Token không hợp lệ',
     }),
-    ApiResponse({ status: 403, description: 'Không có quyền truy cập' }),
+    ApiResponse({
+      status: 403,
+      description: 'Bạn không có quyền thực hiện hành động này',
+    }),
   );
 }

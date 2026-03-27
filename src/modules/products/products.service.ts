@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { Product } from './entities/product.entity';
 
 @Injectable()
 export class ProductsService {
@@ -12,26 +12,34 @@ export class ProductsService {
     private readonly productRepository: Repository<Product>,
   ) {}
 
-  // Tạo mới sản phẩm
-  async create(createProductDto: CreateProductDto): Promise<Product> {
+  // ─── TẠO MỚI SẢN PHẨM ──────────────────────────────────────────────────────
+  async create(dto: CreateProductDto): Promise<Product> {
+    const { categoryId, ...productData } = dto;
+
+    // Khởi tạo instance từ Entity
+    // publicId sẽ tự sinh nhờ @BeforeInsert trong Entity
     const product = this.productRepository.create({
-      ...createProductDto,
-      locked_stock: createProductDto.locked_stock ?? 0,
+      ...productData,
+      category: { id: categoryId }, // Gán quan hệ qua ID
     });
 
-    return this.productRepository.save(product);
+    return await this.productRepository.save(product);
   }
 
-  // Lấy danh sách toàn bộ sản phẩm
+  // ─── LẤY DANH SÁCH SẢN PHẨM ───────────────────────────────────────────────
   async findAll(): Promise<Product[]> {
-    return this.productRepository.find({
-      order: { id: 'DESC' },
+    return await this.productRepository.find({
+      relations: ['category'], // Lấy kèm thông tin danh mục
+      order: { createdAt: 'DESC' },
     });
   }
 
-  // Lấy chi tiết 1 sản phẩm theo id
+  // ─── LẤY CHI TIẾT THEO ID (NỘI BỘ) ────────────────────────────────────────
   async findOne(id: number): Promise<Product> {
-    const product = await this.productRepository.findOne({ where: { id } });
+    const product = await this.productRepository.findOne({
+      where: { id },
+      relations: ['category'],
+    });
 
     if (!product) {
       throw new NotFoundException(`Không tìm thấy sản phẩm với id=${id}`);
@@ -40,23 +48,44 @@ export class ProductsService {
     return product;
   }
 
-  // Cập nhật thông tin sản phẩm theo id
-  async update(
-    id: number,
-    updateProductDto: UpdateProductDto,
-  ): Promise<Product> {
-    const product = await this.findOne(id);
-    const updatedProduct = this.productRepository.merge(
-      product,
-      updateProductDto,
-    );
+  // ─── LẤY CHI TIẾT THEO PUBLIC ID (API NGOÀI) ──────────────────────────────
+  async findByPublicId(publicId: string): Promise<Product> {
+    const product = await this.productRepository.findOne({
+      where: { publicId },
+      relations: ['category'],
+    });
 
-    return this.productRepository.save(updatedProduct);
+    if (!product) {
+      throw new NotFoundException(`Sản phẩm với mã ${publicId} không tồn tại`);
+    }
+
+    return product;
   }
 
-  // Xóa sản phẩm theo id
-  async remove(id: number): Promise<void> {
+  // ─── CẬP NHẬT SẢN PHẨM ─────────────────────────────────────────────────────
+  async update(id: number, dto: UpdateProductDto): Promise<Product> {
     const product = await this.findOne(id);
-    await this.productRepository.remove(product);
+    const { categoryId, ...updateData } = dto;
+
+    // Nếu có cập nhật categoryId, ta gán object chứa ID và ép kiểu 'as any'
+    // Điều này giúp TypeORM hiểu bạn muốn cập nhật khóa ngoại mà không cần load cả Entity Category
+    if (categoryId) {
+      product.categoryId = categoryId;
+    }
+
+    // Merge các thay đổi từ DTO vào thực thể hiện tại (camelCase tự động được giữ nguyên)
+    const updatedProduct = this.productRepository.merge(product, updateData);
+
+    return await this.productRepository.save(updatedProduct);
+  }
+
+  // ─── XÓA SẢN PHẨM (SOFT DELETE) ───────────────────────────────────────────
+  async remove(id: number): Promise<{ message: string }> {
+    const product = await this.findOne(id);
+
+    // Sử dụng softRemove để kích hoạt @DeleteDateColumn (lưu lại deletedAt)
+    await this.productRepository.softRemove(product);
+
+    return { message: 'Đã xóa sản phẩm thành công' };
   }
 }

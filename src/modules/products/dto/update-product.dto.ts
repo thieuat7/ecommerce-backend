@@ -1,22 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
+import { CreateProductDto } from './create-product.dto';
 
-export class UpdateProductDto {
-  @IsString()
-  @IsOptional()
-  name?: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0)
-  @IsOptional()
-  price?: number;
-
-  @IsNumber()
-  @Min(0)
-  @IsOptional()
-  stock?: number;
-
-  @IsNumber()
-  @Min(0)
-  @IsOptional()
-  locked_stock?: number;
-}
+export class UpdateProductDto extends PartialType(CreateProductDto) {}
