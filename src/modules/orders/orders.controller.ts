@@ -6,24 +6,28 @@ import {
   Patch,
   Param,
   Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
-import { GetCurrentUserId } from '@common/decorators/get-current-user-id.decorator';
+import { GetCurrentUser } from '@common/decorators/get-current-user.decorator';
 
+@ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
-  @UseAuth()
+  // ─── TẠO ĐƠN HÀNG ─────────────────────────────────────────────────────────
+  @UseAuth() // Chỉ cần đăng nhập là có thể tạo đơn hàng
   @Post()
+  @ApiOperation({ summary: 'Tạo đơn hàng mới' })
   async create(
     @Body() createOrderDto: CreateOrderDto,
-    @GetCurrentUserId() userId: number,
+    @GetCurrentUser('userId') userId: number, // ✅ Lấy userId chuẩn từ Decorator mới
   ) {
-    // Thêm await để đợi Service xử lý xong
     const order = await this.ordersService.create({
       ...createOrderDto,
       userId,
@@ -36,9 +40,11 @@ export class OrdersController {
     };
   }
 
+  // ─── LẤY DANH SÁCH ĐƠN HÀNG CỦA TÔI ────────────────────────────────────────
   @UseAuth()
   @Get()
-  async findAll(@GetCurrentUserId() userId: number) {
+  @ApiOperation({ summary: 'Lấy danh sách đơn hàng của người dùng hiện tại' })
+  async findAll(@GetCurrentUser('userId') userId: number) {
     const orders = await this.ordersService.findAllByUserId(userId);
     return {
       message: 'Lấy danh sách đơn hàng thành công',
@@ -46,25 +52,32 @@ export class OrdersController {
     };
   }
 
+  // ─── LẤY CHI TIẾT MỘT ĐƠN HÀNG ─────────────────────────────────────────────
   @UseAuth()
   @Get(':id')
-  async findOne(@Param('id') id: string, @GetCurrentUserId() userId: number) {
-    const order = await this.ordersService.findOneByIdAndUserId(+id, userId);
+  @ApiOperation({ summary: 'Lấy chi tiết một đơn hàng' })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number, // ✅ Dùng ParseIntPipe để tự động ép kiểu string sang number
+    @GetCurrentUser('userId') userId: number,
+  ) {
+    const order = await this.ordersService.findOneByIdAndUserId(id, userId);
     return {
       message: 'Lấy chi tiết đơn hàng thành công',
       data: order,
     };
   }
 
+  // ─── CẬP NHẬT ĐƠN HÀNG ──────────────────────────────────────────────────────
   @UseAuth()
   @Patch(':id')
+  @ApiOperation({ summary: 'Cập nhật thông tin/trạng thái đơn hàng' })
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateOrderDto: UpdateOrderDto,
-    @GetCurrentUserId() userId: number,
+    @GetCurrentUser('userId') userId: number,
   ) {
     const updatedOrder = await this.ordersService.updateByIdAndUserId(
-      +id,
+      id,
       userId,
       updateOrderDto,
     );
@@ -74,10 +87,14 @@ export class OrdersController {
     };
   }
 
+  // ─── XÓA ĐƠN HÀNG ──────────────────────────────────────────────────────────
   @UseAuth()
   @Delete(':id')
-  async remove(@Param('id') id: string, @GetCurrentUserId() userId: number) {
-    // Hàm remove trong service của bạn đã trả về { message: '...' } rồi
-    return await this.ordersService.removeByIdAndUserId(+id, userId);
+  @ApiOperation({ summary: 'Xóa đơn hàng (Chỉ khi trạng thái là PENDING)' })
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @GetCurrentUser('userId') userId: number,
+  ) {
+    return await this.ordersService.removeByIdAndUserId(id, userId);
   }
 }

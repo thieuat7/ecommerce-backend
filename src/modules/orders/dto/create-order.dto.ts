@@ -1,28 +1,46 @@
-import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
+  IsString,
+  IsNotEmpty,
   IsArray,
+  ValidateNested,
   IsInt,
   IsPositive,
-  Min,
-  ValidateNested,
+  IsOptional,
+  IsEnum,
 } from 'class-validator';
-
-export class OrderItemDto {
-  @IsInt({ message: 'ID sản phẩm phải là số nguyên' })
-  @IsPositive({ message: 'ID sản phẩm không hợp lệ' })
+import { Type } from 'class-transformer';
+import { OrderStatus } from '../enums/order-status.enum';
+/**
+ * DTO cho từng món hàng trong đơn hàng
+ */
+export class CreateOrderItemDto {
+  @IsInt()
+  @IsPositive({ message: 'ID sản phẩm phải là số dương' })
   productId: number;
 
-  @Min(1, { message: 'Số lượng phải lớn hơn 0' })
-  @IsInt({ message: 'Số lượng phải là số nguyên' })
+  @IsInt()
   @IsPositive({ message: 'Số lượng phải lớn hơn 0' })
   quantity: number;
 }
 
+/**
+ * DTO chính để tạo Đơn hàng
+ */
 export class CreateOrderDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Địa chỉ giao hàng không được để trống' })
+  shippingAddress: string;
+
   @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => OrderItemDto)
-  items: OrderItemDto[];
+  @ValidateNested({ each: true }) // Kiểm tra từng phần tử trong mảng items
+  @Type(() => CreateOrderItemDto)
+  items: CreateOrderItemDto[];
+
+  @IsOptional()
+  @IsEnum(OrderStatus, { message: 'Trạng thái đơn hàng không hợp lệ' })
+  status?: OrderStatus; // Sử dụng Enum ở đây
+
+  @IsOptional()
+  @IsString()
+  orderCode?: string;
 }

@@ -3,30 +3,38 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   OneToMany,
   JoinColumn,
-  Generated,
+  OneToOne,
 } from 'typeorm';
 import { User } from '@modules/users/entities/user.entity';
-import { OrderItem } from '@modules/orders/entities/order-item.entity';
+import { OrderItem } from '@modules/order-items/entities/order-item.entity';
 import { OrderStatus } from '../enums/order-status.enum';
-
+import { Payment } from '@modules/payments/entities/payment.entity';
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'public_id', unique: true })
-  @Generated('uuid')
-  publicId: string;
+  @Column({
+    name: 'order_code',
+    type: 'varchar',
+    length: 50,
+    unique: true,
+  })
+  orderCode: string;
 
-  @Column({ name: 'user_id' })
-  userId: number;
-
-  @ManyToOne(() => User, (user) => user.orders, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  // Sử dụng DECIMAL để lưu tiền tệ chính xác.
+  @Column({
+    name: 'total_amount',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+  })
+  totalAmount: number;
 
   @Column({
     type: 'enum',
@@ -35,15 +43,53 @@ export class Order {
   })
   status: OrderStatus;
 
-  @Column({ name: 'total_price', type: 'decimal', precision: 12, scale: 2 })
-  totalPrice: number;
+  @Column({
+    name: 'shipping_address',
+    type: 'text',
+  })
+  shippingAddress: string;
 
-  @Column({ name: 'expires_at', nullable: true, type: 'timestamp' })
-  expiresAt: Date;
-
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({
+    name: 'created_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   createdAt: Date;
 
-  @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
-  items: OrderItem[];
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  updatedAt: Date;
+
+  @DeleteDateColumn({
+    name: 'deleted_at',
+    type: 'timestamp',
+    nullable: true,
+  })
+  deletedAt: Date;
+
+  // ===============================
+  // QUAN HỆ (RELATIONS)
+  // ===============================
+
+  // Quan hệ N-1 với User
+  // Đảm bảo bên User entity, property cũng là 'orders'
+  @ManyToOne((): typeof User => User, (user: User) => user.orders, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @OneToOne(() => Payment, (payment) => payment.order)
+  payment: Payment;
+
+  // Quan hệ 1-N với OrderItem
+  @OneToMany(
+    (): typeof OrderItem => OrderItem,
+    (orderItem: OrderItem) => orderItem.order,
+    { cascade: true },
+  )
+  orderItems: OrderItem[];
 }

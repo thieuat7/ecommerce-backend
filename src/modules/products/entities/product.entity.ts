@@ -3,58 +3,78 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  VersionColumn,
-  Check,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  ManyToOne,
+  JoinColumn,
+  BeforeInsert,
 } from 'typeorm';
+import { Category } from '@modules/categories/entities/category.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity('products')
-@Check(`"price" >= 0`)
-@Check(`"stock" >= 0`)
-@Check(`"locked_stock" >= 0`)
 export class Product {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({
-    type: 'uuid',
-    unique: true,
-    default: () => 'gen_random_uuid()',
-  })
-  public_id: string;
+  @Column({ name: 'public_id', type: 'varchar', length: 50, unique: true })
+  publicId: string;
 
-  @Column({
-    type: 'varchar',
-    length: 255,
-  })
+  @Column({ type: 'varchar', length: 255 })
   name: string;
 
+  @Column({ type: 'text', nullable: true })
+  description: string;
+
   @Column({
-    type: 'numeric',
-    precision: 12,
+    type: 'decimal',
+    precision: 10,
     scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
   })
   price: number;
 
-  @Column({
-    type: 'int',
-  })
-  stock: number;
+  @Column({ name: 'stock_quantity', type: 'int', default: 0 })
+  stockQuantity: number;
 
-  @Column({
-    type: 'int',
-    default: 0,
-  })
-  locked_stock: number;
+  @Column({ name: 'image_url', type: 'varchar', length: 255, nullable: true })
+  imageUrl: string;
 
-  @VersionColumn({
-    type: 'int',
-    default: 0,
-  })
+  @Column({ type: 'int', default: 0 })
   version: number;
 
   @CreateDateColumn({
+    name: 'created_at',
     type: 'timestamp',
     default: () => 'CURRENT_TIMESTAMP',
   })
-  created_at: Date;
+  createdAt: Date;
+
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt: Date;
+
+  @Column({ name: 'category_id', nullable: true })
+  categoryId: number;
+
+  @ManyToOne(() => Category, (category) => category.products, {
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'category_id' })
+  category: Category;
+
+  @BeforeInsert()
+  generatePublicId() {
+    this.publicId = uuidv4();
+  }
 }

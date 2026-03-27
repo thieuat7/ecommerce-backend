@@ -1,132 +1,183 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class InitialSchema1711440000000 implements MigrationInterface {
-  name = 'InitialSchema1711440000000';
+export class InitEcommerceDatabase1710000000000 implements MigrationInterface {
+  name = 'InitEcommerceDatabase1710000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. Kích hoạt Extension pgcrypto
-    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
-
-    // 2. Tạo ENUM TYPE cho trạng thái đơn hàng
     await queryRunner.query(`
-            CREATE TYPE order_status AS ENUM (
-                'PENDING', 'PAID', 'FAILED', 'CANCELLED', 'COMPLETED'
-            )
-        `);
+      -- ===============================
+      -- A. TẠO CÁC KIỂU DỮ LIỆU ENUM
+      -- ===============================
+      CREATE TYPE auth_provider_enum AS ENUM ('local', 'google', 'facebook', 'apple');
+      CREATE TYPE order_status_enum AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
+      CREATE TYPE payment_method_enum AS ENUM ('cod', 'credit_card', 'bank_transfer', 'e_wallet');
+      CREATE TYPE payment_status_enum AS ENUM ('pending', 'completed', 'failed', 'refunded');
 
-    // 3. Bảng USERS
-    await queryRunner.query(`
-            CREATE TABLE users (
-                id SERIAL PRIMARY KEY,
-                public_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-                email VARCHAR(255) NOT NULL UNIQUE,
-                name VARCHAR(255) NOT NULL,
-                password TEXT NOT NULL,
-                current_hashed_refresh_token TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+      -- ===============================
+      -- B. TẠO HÀM TỰ ĐỘNG CẬP NHẬT updated_at
+      -- ===============================
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = CURRENT_TIMESTAMP;
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';
 
-    // 4. Bảng PRODUCTS
-    await queryRunner.query(`
-            CREATE TABLE products (
-                id SERIAL PRIMARY KEY,
-                public_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-                name VARCHAR(255) NOT NULL,
-                price NUMERIC(12,2) NOT NULL CHECK (price >= 0),
-                stock INT NOT NULL CHECK (stock >= 0),
-                locked_stock INT NOT NULL DEFAULT 0 CHECK (locked_stock >= 0),
-                version INT NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+      -- ===============================
+      -- 1. ROLES
+      -- ===============================
+      CREATE TABLE roles (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(50) NOT NULL UNIQUE,
+          description TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TRIGGER update_roles_modtime BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-    // 5. Bảng ORDERS
-    await queryRunner.query(`
-            CREATE TABLE orders (
-                id SERIAL PRIMARY KEY,
-                public_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-                user_id INT NOT NULL,
-                status order_status NOT NULL DEFAULT 'PENDING',
-                total_price NUMERIC(12,2) NOT NULL CHECK (total_price >= 0),
-                expires_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        `);
+      -- ===============================
+      -- 2. USERS
+      -- ===============================
+      CREATE TABLE users (
+          id SERIAL PRIMARY KEY,
+          public_id VARCHAR(50) UNIQUE NOT NULL,
+          full_name VARCHAR(100) NOT NULL,
+          email VARCHAR(100) NOT NULL UNIQUE,
+          password_hash VARCHAR(255) NULL,
+          
+          auth_provider auth_provider_enum DEFAULT 'local',
+          provider_id VARCHAR(255) NULL,
+          
+          phone_number VARCHAR(20),
+          address TEXT,
+          
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP NULL,
+          
+          UNIQUE (auth_provider, provider_id)
+      );
+      CREATE TRIGGER update_users_modtime BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-    // 6. Bảng ORDER_ITEMS
-    await queryRunner.query(`
-            CREATE TABLE order_items (
-                id SERIAL PRIMARY KEY,
-                order_id INT NOT NULL,
-                product_id INT NOT NULL,
-                quantity INT NOT NULL CHECK (quantity > 0),
-                price NUMERIC(12,2) NOT NULL CHECK (price >= 0),
-                CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-                CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(id)
-            )
-        `);
+      -- ===============================
+      -- 3. USER ROLES (N-N)
+      -- ===============================
+      CREATE TABLE user_roles (
+          user_id INT REFERENCES users(id) ON DELETE CASCADE,
+          role_id INT REFERENCES roles(id) ON DELETE CASCADE,
+          PRIMARY KEY (user_id, role_id)
+      );
 
-    // 7. Thêm UNIQUE CONSTRAINT & INDEXES
-    await queryRunner.query(
-      `ALTER TABLE order_items ADD CONSTRAINT unique_order_product UNIQUE (order_id, product_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_users_public_id ON users(public_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_products_public_id ON products(public_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_orders_user_id ON orders(user_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_orders_public_id ON orders(public_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_order_items_order_id ON order_items(order_id)`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX idx_order_items_product_id ON order_items(product_id)`,
-    );
+      -- ===============================
+      -- 4. CATEGORIES
+      -- ===============================
+      CREATE TABLE categories (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TRIGGER update_categories_modtime BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-    // 8. SEED DỮ LIỆU TEST
-    await queryRunner.query(
-      `INSERT INTO users (email, name, password) VALUES ('test@gmail.com', 'Ngo Ta', '123456_hashed')`,
-    );
-    await queryRunner.query(`
-            INSERT INTO products (name, price, stock, version)
-            VALUES 
-                ('Bàn phím cơ', 1500000.00, 100, 0),
-                ('Chuột không dây Logitech', 450000.00, 150, 0),
-                ('Màn hình Dell 24 inch', 3500000.00, 50, 0),
-                ('Tai nghe Bluetooth Sony', 1200000.00, 200, 0),
-                ('Laptop Gaming Asus', 25000000.00, 20, 0),
-                ('Bàn di chuột RGB', 250000.00, 300, 0),
-                ('Cáp sạc Type-C Anker', 150000.00, 500, 0),
-                ('Củ sạc nhanh 20W', 200000.00, 400, 0),
-                ('Giá đỡ laptop nhôm', 300000.00, 120, 0),
-                ('Balo chống nước', 550000.00, 80, 0),
-                ('Ổ cứng SSD 512GB Samsung', 1100000.00, 90, 0),
-                ('RAM Corsair DDR4 16GB', 950000.00, 150, 0),
-                ('Bàn phím giả cơ', 350000.00, 200, 0),
-                ('Webcam Logitech Full HD', 850000.00, 60, 0),
-                ('Micro thu âm Rode', 1400000.00, 40, 0),
-                ('Loa vi tính 2.1', 750000.00, 70, 0),
-                ('USB 64GB Kingston', 120000.00, 600, 0),
-                ('Hub chuyển đổi USB Type-C', 650000.00, 110, 0),
-                ('Tay cầm chơi game Xbox', 1800000.00, 85, 0),
-                ('Ghế công thái học', 3200000.00, 30, 0)
-        `);
+      -- ===============================
+      -- 5. PRODUCTS
+      -- ===============================
+      CREATE TABLE products (
+          id SERIAL PRIMARY KEY,
+          public_id VARCHAR(50) UNIQUE NOT NULL,
+          category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+          
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          
+          price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
+          stock_quantity INT DEFAULT 0 CHECK (stock_quantity >= 0),
+          image_url VARCHAR(255),
+          version INT NOT NULL DEFAULT 0,
+          
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP NULL
+      );
+      CREATE TRIGGER update_products_modtime BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      CREATE INDEX idx_products_category_id ON products(category_id);
+
+      -- ===============================
+      -- 6. ORDERS
+      -- ===============================
+      CREATE TABLE orders (
+          id SERIAL PRIMARY KEY,
+          order_code VARCHAR(50) UNIQUE NOT NULL,
+          user_id INT REFERENCES users(id) ON DELETE CASCADE,
+          
+          total_amount DECIMAL(10, 2) NOT NULL CHECK (total_amount >= 0),
+          status order_status_enum DEFAULT 'pending',
+          shipping_address TEXT NOT NULL,
+          
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP NULL
+      );
+      CREATE TRIGGER update_orders_modtime BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      CREATE INDEX idx_orders_user_id ON orders(user_id);
+
+      -- ===============================
+      -- 7. ORDER ITEMS
+      -- ===============================
+      CREATE TABLE order_items (
+          id SERIAL PRIMARY KEY,
+          order_id INT REFERENCES orders(id) ON DELETE CASCADE,
+          product_id INT REFERENCES products(id) ON DELETE NO ACTION,
+          
+          quantity INT NOT NULL CHECK (quantity > 0),
+          price_at_purchase DECIMAL(10, 2) NOT NULL CHECK (price_at_purchase >= 0),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          
+          UNIQUE (order_id, product_id)
+      );
+      CREATE INDEX idx_order_items_product_id ON order_items(product_id);
+
+      -- ===============================
+      -- 8. PAYMENTS
+      -- ===============================
+      CREATE TABLE payments (
+          id SERIAL PRIMARY KEY,
+          public_id VARCHAR(50) UNIQUE NOT NULL,
+          order_id INT REFERENCES orders(id) ON DELETE CASCADE,
+          
+          payment_method payment_method_enum NOT NULL,
+          payment_status payment_status_enum DEFAULT 'pending',
+          transaction_id VARCHAR(100) UNIQUE,
+          paid_at TIMESTAMP NULL,
+          
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TRIGGER update_payments_modtime BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+      CREATE INDEX idx_payments_order_id ON payments(order_id);
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Hủy theo thứ tự ngược lại để không bị lỗi khóa ngoại (Foreign Key)
-    await queryRunner.query(`DROP TABLE order_items`);
-    await queryRunner.query(`DROP TABLE orders`);
-    await queryRunner.query(`DROP TABLE products`);
-    await queryRunner.query(`DROP TABLE users`);
-    await queryRunner.query(`DROP TYPE order_status`);
+    // Hoàn tác: Xóa từ dưới lên trên, từ bảng con đến bảng cha, sau đó là function và enums
+    await queryRunner.query(`
+      DROP TABLE IF EXISTS payments CASCADE;
+      DROP TABLE IF EXISTS order_items CASCADE;
+      DROP TABLE IF EXISTS orders CASCADE;
+      DROP TABLE IF EXISTS products CASCADE;
+      DROP TABLE IF EXISTS categories CASCADE;
+      DROP TABLE IF EXISTS user_roles CASCADE;
+      DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS roles CASCADE;
+
+      DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
+
+      DROP TYPE IF EXISTS auth_provider_enum CASCADE;
+      DROP TYPE IF EXISTS order_status_enum CASCADE;
+      DROP TYPE IF EXISTS payment_method_enum CASCADE;
+      DROP TYPE IF EXISTS payment_status_enum CASCADE;
+    `);
   }
 }

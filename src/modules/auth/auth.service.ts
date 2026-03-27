@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
@@ -15,9 +19,9 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  // 1. Đăng ký tài khoản (Đã loại bỏ Token)
+  // 1. Đăng ký tài khoản
   async register(dto: RegisterDto) {
-    // Kiểm tra email tồn tại
+    // Sử dụng hàm findOne mới để kiểm tra email
     const existingUser = await this.usersService.findByEmail(dto.email);
     if (existingUser) {
       throw new BadRequestException('Email này đã được sử dụng!');
@@ -26,9 +30,10 @@ export class AuthService {
     // Mã hóa mật khẩu
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    // Lưu người dùng mới
+    // Lưu người dùng mới (Service đã tự động gán role 'user' mặc định)
     const newUser = await this.usersService.create({
       ...dto,
+      fullName: dto.fullName,
       password: hashedPassword,
     });
 
@@ -36,18 +41,22 @@ export class AuthService {
       message: 'Đăng ký tài khoản thành công. Vui lòng đăng nhập.',
       user: {
         id: newUser.id,
+        publicId: newUser.publicId,
         email: newUser.email,
-        name: newUser.name,
+        fullName: newUser.fullName,
       },
     };
   }
 
   // 2. Đăng nhập
   async login(dto: LoginDto) {
-    // sử dụng findByEmailWithPassword để lấy trường password
-    const user = await this.usersService.findByEmailWithPassword(dto.email);
+    // Lấy user kèm cả Password và Roles chỉ với 1 lần gọi hàm findOne
+    const user = await this.usersService.findOne(
+      { email: dto.email },
+      { includePassword: true, includeRoles: true },
+    );
 
-    if (!user) {
+    if (!user || !user.password) {
       throw new BadRequestException('Email hoặc mật khẩu không đúng!');
     }
 
@@ -57,16 +66,19 @@ export class AuthService {
       throw new BadRequestException('Email hoặc mật khẩu không đúng!');
     }
 
-    // Tạo access + refresh token
+    // Trích xuất danh sách tên Roles (Ví dụ: ['user', 'admin'])
+    const roleNames = user.roles?.map((role) => role.name) || [];
 
+    // Tạo bộ Access + Refresh token
     const { accessToken, refreshToken } = await getTokens(
       this.jwtService,
       this.configService,
       user.id,
       user.email,
+      roleNames,
     );
 
-    // Lưu hash của refresh token
+    // Lưu hash của refresh token vào DB (Sử dụng hàm update đã tối ưu)
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await this.usersService.setCurrentRefreshToken(hashedRefreshToken, user.id);
 
@@ -74,34 +86,39 @@ export class AuthService {
       message: 'Đăng nhập thành công',
       user: {
         id: user.id,
+        publicId: user.publicId,
         email: user.email,
-        name: user.name,
+        fullName: user.fullName,
+        roles: roleNames,
       },
-      access_token: accessToken,
-      refresh_token: refreshToken,
+      accessToken, // Chuẩn camelCase cho API response
+      refreshToken,
     };
   }
 
   // 3. Làm mới Token
   async refreshToken(userId: number, refreshToken: string) {
-    // SỬ DỤNG: findByIdWithPassword để lấy trường current_hashed_refresh_token
-    const user = await this.usersService.findByIdWithPassword(userId);
+    // Lấy user kèm theo hashedRefreshToken và Roles
+    const user = await this.usersService.findOne(
+      { id: userId },
+      { includePassword: true, includeRoles: true },
+    );
 
-    if (!user || !user.current_hashed_refresh_token) {
-      throw new BadRequestException(
-        'Refresh token không hợp lệ hoặc đã hết hạn',
-      );
+    if (!user || !user.currentHashedRefreshToken) {
+      throw new UnauthorizedException('Phiên làm việc đã hết hạn');
     }
 
-    // Kiểm tra tính hợp lệ của refresh token gửi lên so với hash trong DB
+    // Kiểm tra tính hợp lệ của refresh token gửi lên
     const isTokenValid = await bcrypt.compare(
       refreshToken,
-      user.current_hashed_refresh_token,
+      user.currentHashedRefreshToken,
     );
 
     if (!isTokenValid) {
-      throw new BadRequestException('Refresh token không hợp lệ');
+      throw new UnauthorizedException('Refresh token không hợp lệ');
     }
+
+    const roleNames = user.roles?.map((role) => role.name) || [];
 
     // Tạo bộ token mới
     const { accessToken, refreshToken: newRefreshToken } = await getTokens(
@@ -109,6 +126,7 @@ export class AuthService {
       this.configService,
       user.id,
       user.email,
+      roleNames,
     );
 
     // Cập nhật lại hash mới vào DB
@@ -116,14 +134,15 @@ export class AuthService {
     await this.usersService.setCurrentRefreshToken(hashedRefreshToken, user.id);
 
     return {
-      access_token: accessToken,
-      refresh_token: newRefreshToken,
+      accessToken,
+      refreshToken: newRefreshToken,
     };
   }
 
   // 4. Đăng xuất
   async logout(userId: number) {
-    await this.usersService.removeRefreshToken(userId);
+    // Truyền null để xóa token trong DB
+    await this.usersService.setCurrentRefreshToken(null, userId);
     return { message: 'Đăng xuất thành công' };
   }
 }

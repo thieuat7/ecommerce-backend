@@ -3,7 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { GetCurrentUserId } from '@common/decorators/get-current-user-id.decorator';
+import { GetCurrentUser } from '@common/decorators/get-current-user.decorator';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 
 @ApiTags('Auth')
@@ -11,7 +11,6 @@ import { UseAuth } from '@common/decorators/use-auth.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Đăng ký tài khoản mới
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Đăng ký tài khoản mới' })
@@ -19,7 +18,6 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
-  // Đăng nhập
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập hệ thống' })
@@ -27,12 +25,16 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  // Đăng xuất (Yêu cầu xác thực)
+  /**
+   * ĐĂNG XUẤT
+   * Sử dụng @UseAuth() (Access Token)
+   * Sử dụng @GetCurrentUser('userId') để lấy đúng ID đã được AtStrategy xử lý
+   */
   @UseAuth()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng xuất' })
-  logout(@GetCurrentUserId() userId: number) {
+  logout(@GetCurrentUser('userId') userId: number) {
     return this.authService.logout(userId);
   }
 }

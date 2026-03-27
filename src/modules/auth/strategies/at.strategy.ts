@@ -2,30 +2,34 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-
-type AccessTokenPayload = {
-  sub: number;
-  email: string;
-};
+import { JwtPayload } from '@common/interfaces/auth.interface';
 
 @Injectable()
 export class AtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(configService: ConfigService) {
-    console.log('Strategy Secret:', configService.get('JWT_SECRET'));
     super({
-      // 1. Lấy Token từ header Authorization dạng 'Bearer <token>'
+      // Lấy Token từ header Authorization dạng 'Bearer <token>'
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
-  // Sau khi giải mã thành công, payload của Token sẽ được đưa vào hàm này
-  validate(payload: AccessTokenPayload) {
-    if (!payload?.sub) {
-      throw new UnauthorizedException('Invalid token payload');
+  /**
+   * Sau khi Passport giải mã JWT thành công, dữ liệu sẽ được chuyển vào đây.
+   * Những gì hàm này return sẽ được gán trực tiếp vào 'req.user'.
+   */
+  validate(payload: JwtPayload) {
+    // Kiểm tra tính hợp lệ cơ bản của payload
+    if (!payload || !payload.sub) {
+      throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn');
     }
 
-    return { sub: payload.sub, email: payload.email };
+    // 2. Trả về object chứa đầy đủ thông tin cần thiết cho req.user
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      roles: payload.roles,
+    };
   }
 }
