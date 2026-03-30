@@ -21,12 +21,12 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   // ─── TẠO ĐƠN HÀNG ─────────────────────────────────────────────────────────
-  @UseAuth() // Chỉ cần đăng nhập là có thể tạo đơn hàng
+  @UseAuth()
   @Post()
   @ApiOperation({ summary: 'Tạo đơn hàng mới' })
   async create(
     @Body() createOrderDto: CreateOrderDto,
-    @GetCurrentUser('userId') userId: number, // ✅ Lấy userId chuẩn từ Decorator mới
+    @GetCurrentUser('userId') userId: number,
   ) {
     const order = await this.ordersService.create({
       ...createOrderDto,

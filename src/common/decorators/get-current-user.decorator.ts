@@ -7,7 +7,6 @@ type RequestWithUser = Request & { user: RequestUser };
 
 export const GetCurrentUser = createParamDecorator(
   (data: keyof RequestUser | undefined, context: ExecutionContext) => {
-    // Truyền Generic <RequestWithUser> vào getRequest để xóa lỗi 'any'
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 
