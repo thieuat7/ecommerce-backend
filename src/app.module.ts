@@ -9,6 +9,7 @@ import { UsersModule } from '@modules/users/users.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { ProductsModule } from '@modules/products/products.module';
 import { OrdersModule } from '@modules/orders/orders.module';
+import { CategoriesModule } from '@modules/categories/categories.module';
 
 import databaseConfig from '@database/database.config';
 
@@ -24,6 +25,7 @@ import databaseConfig from '@database/database.config';
     AuthModule,
     ProductsModule,
     OrdersModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
