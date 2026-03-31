@@ -6,14 +6,16 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagger';
-import { ProductsService } from './products.service';
+import { ApiOperation, ApiTags, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ProductsService, PaginatedProducts } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { FilterProductDto } from './dto/filter-product.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 import { Product } from './entities/product.entity';
 
@@ -31,6 +33,54 @@ export class ProductsController {
   @ApiResponse({ status: 200, description: 'Danh sách sản phẩm' })
   findAll(): Promise<Product[]> {
     return this.productsService.findAll();
+  }
+
+  @Get('filter')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Lọc & tìm kiếm sản phẩm (có phân trang)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách sản phẩm đã lọc kèm thông tin phân trang',
+  })
+  @ApiQuery({
+    name: 'name',
+    required: false,
+    description: 'Tìm theo tên sản phẩm',
+  })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'ID danh mục' })
+  @ApiQuery({ name: 'minPrice', required: false, description: 'Giá tối thiểu' })
+  @ApiQuery({ name: 'maxPrice', required: false, description: 'Giá tối đa' })
+  @ApiQuery({
+    name: 'minStock',
+    required: false,
+    description: 'Tồn kho tối thiểu',
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['price', 'name', 'createdAt', 'stockQuantity'],
+    description: 'Trường sắp xếp',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Chiều sắp xếp',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Trang (mặc định 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Số bản ghi/trang (mặc định 10)',
+  })
+  filterProducts(
+    @Query() filterDto: FilterProductDto,
+  ): Promise<PaginatedProducts> {
+    return this.productsService.findWithFilter(filterDto);
   }
 
   @Get(':id')
