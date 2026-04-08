@@ -27,8 +27,6 @@ export class Role {
   })
   description: string | null;
 
-  // Sử dụng camelCase cho thuộc tính,
-  // nhưng vẫn giữ snake_case cho tên cột dưới DB thông qua option 'name'
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',

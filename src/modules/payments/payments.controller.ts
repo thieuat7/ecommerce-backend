@@ -15,12 +15,14 @@ export class PaymentsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo yêu cầu thanh toán qua MoMo' })
   async processMoMoPayment(@Body() createPaymentDto: CreatePaymentDto) {
+    // Truyền thêm orderId vào hàm payWithMoMoMethod
     const data = await this.paymentsService.payWithMoMoMethod(
+      createPaymentDto.orderId,
       createPaymentDto.amount,
     );
 
     return {
-      message: 'Tạo thanh toán thành công',
+      message: 'Tạo link thanh toán MoMo thành công',
       data,
     };
   }

@@ -6,21 +6,27 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AxiosError } from 'axios';
 import * as crypto from 'crypto';
 import { lastValueFrom } from 'rxjs';
+
 import { MoMoConfig, MoMoResponse } from './interfaces/momo.interface';
+import { Payment } from './entities/payment.entity';
+import { PaymentMethod, PaymentStatus } from './enums/payment.enum';
 
 @Injectable()
 export class PaymentsService {
-  // Gom nhóm cấu hình MoMo vào một object để dễ quản lý
   private readonly momoConfig: MoMoConfig;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    // 1. Tiêm Payment Repository để làm việc với Database
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
   ) {
-    // Chỉ đọc config 1 lần duy nhất khi khởi tạo Service
     this.momoConfig = {
       accessKey: this.configService.getOrThrow<string>('MOMO_ACCESS_KEY'),
       secretKey: this.configService.getOrThrow<string>('MOMO_SECRET_KEY'),
@@ -35,8 +41,11 @@ export class PaymentsService {
     };
   }
 
-  // Hàm nghiệp vụ chính giờ đây rất gọn gàng và dễ đọc
-  async payWithMoMoMethod(amount: string): Promise<MoMoResponse> {
+  // 2. Thêm systemOrderId để biết thanh toán này thuộc về đơn hàng nào
+  async payWithMoMoMethod(
+    systemOrderId: number,
+    amount: string,
+  ): Promise<MoMoResponse> {
     const {
       partnerCode,
       apiUrl,
@@ -48,19 +57,34 @@ export class PaymentsService {
       lang,
     } = this.momoConfig;
 
-    const orderInfo = 'Thanh toán đơn hàng qua MoMo';
-    const orderId = `${partnerCode}${new Date().getTime()}`;
-    const requestId = orderId;
+    const orderInfo = `Thanh toán đơn hàng #${systemOrderId} qua MoMo`;
+
+    // Tạo mã đơn hàng gửi cho MoMo (Phải là duy nhất)
+    const momoOrderId = `${partnerCode}_${systemOrderId}_${new Date().getTime()}`;
+    const requestId = momoOrderId; // Thông thường requestId có thể giống orderId
     const extraData = '';
     const orderGroupId = '';
     const autoCapture = true;
+
+    // ==========================================
+    // 3. LƯU THÔNG TIN VÀO DATABASE TRƯỚC KHI GỌI MOMO
+    // ==========================================
+    const newPayment = this.paymentRepository.create({
+      amount: parseFloat(amount),
+      paymentMethod: PaymentMethod.MOMO,
+      status: PaymentStatus.PENDING,
+      transactionId: momoOrderId,
+      order: { id: systemOrderId },
+    });
+
+    await this.paymentRepository.save(newPayment);
 
     // Lấy chữ ký từ hàm helper
     const signature = this.createSignature({
       amount,
       extraData,
       ipnUrl,
-      orderId,
+      orderId: momoOrderId,
       orderInfo,
       partnerCode,
       redirectUrl,
@@ -74,7 +98,7 @@ export class PaymentsService {
       storeId,
       requestId,
       amount,
-      orderId,
+      orderId: momoOrderId,
       orderInfo,
       redirectUrl,
       ipnUrl,
@@ -93,6 +117,7 @@ export class PaymentsService {
 
       // Kiểm tra MoMo trả về payUrl hợp lệ
       if (!response.data?.payUrl) {
+        // Nếu MoMo từ chối tạo link, bạn có thể cập nhật trạng thái Payment thành FAILED ở đây nếu muốn
         throw new BadRequestException(
           response.data?.message || 'Tạo thanh toán thất bại',
         );
@@ -116,7 +141,6 @@ export class PaymentsService {
     }
   }
 
-  // Tách riêng logic mã hóa ra một hàm private độc lập
   private createSignature(params: {
     amount: string;
     extraData: string;
