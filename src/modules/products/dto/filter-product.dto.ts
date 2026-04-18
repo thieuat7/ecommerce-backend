@@ -11,7 +11,10 @@ import {
 
 export class FilterProductDto {
   // ─── TÌM KIẾM ──────────────────────────────────────────────────────────────
-  @ApiPropertyOptional({ example: 'iPhone', description: 'Tìm theo tên sản phẩm (LIKE)' })
+  @ApiPropertyOptional({
+    example: 'iPhone',
+    description: 'Tìm theo tên sản phẩm (LIKE)',
+  })
   @IsOptional()
   @IsString()
   name?: string;
@@ -40,7 +43,10 @@ export class FilterProductDto {
   maxPrice?: number;
 
   // ─── LỌC THEO TỒN KHO ──────────────────────────────────────────────────────
-  @ApiPropertyOptional({ example: 1, description: 'Số lượng tồn kho tối thiểu' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Số lượng tồn kho tối thiểu',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -50,7 +56,8 @@ export class FilterProductDto {
   // ─── SẮP XẾP ───────────────────────────────────────────────────────────────
   @ApiPropertyOptional({
     example: 'price',
-    description: 'Sắp xếp theo trường (price | name | createdAt | stockQuantity)',
+    description:
+      'Sắp xếp theo trường (price | name | createdAt | stockQuantity)',
     enum: ['price', 'name', 'createdAt', 'stockQuantity'],
   })
   @IsOptional()
@@ -69,7 +76,10 @@ export class FilterProductDto {
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
 
   // ─── PHÂN TRANG ─────────────────────────────────────────────────────────────
-  @ApiPropertyOptional({ example: 1, description: 'Trang hiện tại (bắt đầu từ 1)' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Trang hiện tại (bắt đầu từ 1)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

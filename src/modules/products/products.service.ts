@@ -35,12 +35,27 @@ export class ProductsService {
     return await this.productRepository.save(product);
   }
 
-  // ─── LẤY DANH SÁCH SẢN PHẨM ───────────────────────────────────────────────
-  async findAll(): Promise<Product[]> {
-    return await this.productRepository.find({
-      relations: ['category'], // Lấy kèm thông tin danh mục
+  // ─── LẤY DANH SÁCH SẢN PHẨM (CÓ PHÂN TRANG) ───────────────────────────────
+  async findAll(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedProducts> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.productRepository.findAndCount({
+      relations: ['category'],
       order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
     });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   // ─── LỌC & TÌM KIẾM SẢN PHẨM (CÓ PHÂN TRANG) ────────────────────────────

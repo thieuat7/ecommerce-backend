@@ -2,6 +2,7 @@ import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import type { MoMoIpnPayload } from './interfaces/momo.interface';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 
 @ApiTags('Payments')
@@ -25,5 +26,16 @@ export class PaymentsController {
       message: 'Tạo link thanh toán MoMo thành công',
       data,
     };
+  }
+
+  // ─── XỬ LÝ IPN (WEBHOOK) TỪ MOMO ───────────────────────────────────────────
+  // Không dùng @UseAuth — MoMo gọi trực tiếp từ server của họ, không mang token
+  @Post('momo/ipn')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'IPN Webhook — MoMo gọi về khi có kết quả thanh toán',
+  })
+  async handleMoMoIpn(@Body() payload: MoMoIpnPayload) {
+    return this.paymentsService.handleMoMoIpn(payload);
   }
 }

@@ -6,7 +6,9 @@ import {
   UpdateDateColumn,
   OneToOne,
   JoinColumn,
+  BeforeInsert,
 } from 'typeorm';
+import * as crypto from 'crypto';
 import { Order } from '@modules/orders/entities/order.entity';
 import { PaymentMethod, PaymentStatus } from '../enums/payment.enum';
 
@@ -14,6 +16,20 @@ import { PaymentMethod, PaymentStatus } from '../enums/payment.enum';
 export class Payment {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({
+    name: 'public_id',
+    type: 'varchar',
+    unique: true,
+  })
+  publicId: string;
+
+  @BeforeInsert()
+  generatePublicId() {
+    if (!this.publicId) {
+      this.publicId = crypto.randomUUID();
+    }
+  }
 
   @Column({
     type: 'decimal',
@@ -30,20 +46,40 @@ export class Payment {
     name: 'payment_method',
     type: 'enum',
     enum: PaymentMethod,
-    default: PaymentMethod.CASH,
   })
   paymentMethod: PaymentMethod;
 
-  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
+  @Column({
+    name: 'payment_status',
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.PENDING,
+  })
   status: PaymentStatus;
 
   @Column({
     name: 'transaction_id',
     type: 'varchar',
     length: 100,
+    unique: true,
     nullable: true,
   })
   transactionId: string;
+
+  @Column({
+    name: 'momo_trans_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  momoTransId: string;
+
+  @Column({
+    name: 'paid_at',
+    type: 'timestamp',
+    nullable: true,
+  })
+  paidAt: Date;
 
   @CreateDateColumn({
     name: 'created_at',
@@ -63,7 +99,6 @@ export class Payment {
   // QUAN HỆ (RELATIONS)
   // ===============================
 
-  // Đã thêm kiểu (order: Order) để tránh lỗi 'any' của ESLint
   @OneToOne(() => Order, (order: Order) => order.payment, {
     onDelete: 'CASCADE',
   })

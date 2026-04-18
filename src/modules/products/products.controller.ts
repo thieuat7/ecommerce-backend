@@ -29,10 +29,31 @@ export class ProductsController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lấy danh sách tất cả sản phẩm' })
-  @ApiResponse({ status: 200, description: 'Danh sách sản phẩm' })
-  findAll(): Promise<Product[]> {
-    return this.productsService.findAll();
+  @ApiOperation({ summary: 'Lấy danh sách sản phẩm (có phân trang)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách sản phẩm kèm thông tin phân trang',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Trang hiện tại (mặc định 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Số sản phẩm mỗi trang (mặc định 10)',
+    example: 10,
+  })
+  findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ): Promise<PaginatedProducts> {
+    return this.productsService.findAll(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 10,
+    );
   }
 
   @Get('filter')

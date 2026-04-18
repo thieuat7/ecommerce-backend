@@ -12,7 +12,11 @@ import { AxiosError } from 'axios';
 import * as crypto from 'crypto';
 import { lastValueFrom } from 'rxjs';
 
-import { MoMoConfig, MoMoResponse } from './interfaces/momo.interface';
+import {
+  MoMoConfig,
+  MoMoIpnPayload,
+  MoMoResponse,
+} from './interfaces/momo.interface';
 import { Payment } from './entities/payment.entity';
 import { PaymentMethod, PaymentStatus } from './enums/payment.enum';
 
@@ -62,7 +66,11 @@ export class PaymentsService {
     // Tạo mã đơn hàng gửi cho MoMo (Phải là duy nhất)
     const momoOrderId = `${partnerCode}_${systemOrderId}_${new Date().getTime()}`;
     const requestId = momoOrderId; // Thông thường requestId có thể giống orderId
-    const extraData = '';
+
+    // Mã hóa extraData = Base64(JSON) — decode lại khi nhận IPN
+    const extraDataRaw = JSON.stringify({ orderId: systemOrderId });
+    const extraData = Buffer.from(extraDataRaw).toString('base64');
+
     const orderGroupId = '';
     const autoCapture = true;
 
@@ -75,6 +83,8 @@ export class PaymentsService {
       status: PaymentStatus.PENDING,
       transactionId: momoOrderId,
       order: { id: systemOrderId },
+      // publicId tự sinh nhờ @Generated('uuid') trong entity
+      // paidAt để null cho đến khi nhận IPN thành công
     });
 
     await this.paymentRepository.save(newPayment);
@@ -139,6 +149,74 @@ export class PaymentsService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  // ─── Xử LÝ IPN TỪ MOMO (WEBHOOK) ──────────────────────────────────────────
+  async handleMoMoIpn(payload: MoMoIpnPayload): Promise<{ message: string }> {
+    const {
+      orderId,
+      requestId,
+      amount,
+      orderInfo,
+      orderType,
+      transId,
+      resultCode,
+      message,
+      payType,
+      responseTime,
+      extraData,
+      signature,
+    } = payload;
+
+    // Bước 1: Xác thực chữ ký HMAC-SHA256 — đảm bảo request đến từ MoMo
+    const rawSignature =
+      `accessKey=${this.momoConfig.accessKey}` +
+      `&amount=${amount}` +
+      `&extraData=${extraData}` +
+      `&message=${message}` +
+      `&orderId=${orderId}` +
+      `&orderInfo=${orderInfo}` +
+      `&orderType=${orderType}` +
+      `&partnerCode=${this.momoConfig.partnerCode}` +
+      `&payType=${payType}` +
+      `&requestId=${requestId}` +
+      `&responseTime=${responseTime}` +
+      `&resultCode=${resultCode}` +
+      `&transId=${transId}`;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', this.momoConfig.secretKey)
+      .update(rawSignature)
+      .digest('hex');
+
+    if (expectedSignature !== signature) {
+      throw new BadRequestException('Chữ ký IPN không hợp lệ');
+    }
+
+    // Bước 2: Tìm bản ghi Payment theo transactionId (= momoOrderId)
+    const payment = await this.paymentRepository.findOne({
+      where: { transactionId: orderId },
+    });
+
+    if (!payment) {
+      // Không ném lỗi — trả 200 OK để MoMo không retry lỗi
+      return { message: 'Payment record not found, ignored' };
+    }
+
+    // Bước 3: Cập nhật trạng thái dựa vào resultCode (0 = thành công)
+    if (resultCode === 0) {
+      payment.status = PaymentStatus.COMPLETED;
+      payment.paidAt = new Date(); // Ghi lại thời điểm thanh toán thành công
+    } else {
+      payment.status = PaymentStatus.FAILED;
+    }
+
+    // Bước 4: Lưu mã giao dịch MoMo (transId) vào DB để tra cứu sau
+    payment.momoTransId = String(transId);
+
+    await this.paymentRepository.save(payment);
+
+    return { message: 'IPN xử lý thành công' };
   }
 
   private createSignature(params: {

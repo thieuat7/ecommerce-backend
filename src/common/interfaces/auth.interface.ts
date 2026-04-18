@@ -24,4 +24,5 @@ export interface RequestUser {
   userId: number;
   email: string;
   roles: string[];
+  refreshToken?: string; // Chỉ có khi dùng RtGuard (refresh token endpoint)
 }
