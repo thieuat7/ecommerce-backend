@@ -39,15 +39,22 @@ export class ProductsService {
   async findAll(
     page: number = 1,
     limit: number = 10,
+    categoryId?: number,
   ): Promise<PaginatedProducts> {
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.productRepository.findAndCount({
-      relations: ['category'],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .orderBy('product.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    if (categoryId !== undefined) {
+      qb.andWhere('product.categoryId = :categoryId', { categoryId });
+    }
+
+    const [data, total] = await qb.getManyAndCount();
 
     return {
       data,

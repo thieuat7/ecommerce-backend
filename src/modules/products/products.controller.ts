@@ -46,13 +46,21 @@ export class ProductsController {
     description: 'Số sản phẩm mỗi trang (mặc định 10)',
     example: 10,
   })
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: 'Lọc theo ID danh mục',
+    example: 2,
+  })
   findAll(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('categoryId') categoryId?: number,
   ): Promise<PaginatedProducts> {
     return this.productsService.findAll(
       page ? Number(page) : 1,
       limit ? Number(limit) : 10,
+      categoryId ? Number(categoryId) : undefined,
     );
   }
 
