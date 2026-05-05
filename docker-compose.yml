@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # 1. Database Service
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: ecommerce_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: ecommerce_db
+    ports:
+      - "5433:5432" # Map cổng 5433 trên máy local vào cổng 5432 của container
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    # Kiểm tra xem DB đã sẵn sàng nhận kết nối chưa
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecommerce_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Init Container: Chạy Migration và Seed (Chạy xong rồi thoát)
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder # Cần ở stage builder để có devDependencies chạy script db
+    container_name: ecommerce_migrate
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123456
+      DB_DATABASE: ecommerce_db
+    command: sh -c "npm run db:setup"
+    depends_on:
+      postgres-db:
+        condition: service_healthy # Đợi DB khỏe mới chạy migration
+
+  # 3. Main Backend Service (Local Dev Mode)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder # Dừng ở stage builder để giữ lại Nest CLI và devDependencies
+    container_name: ecommerce_backend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123456
+      DB_DATABASE: ecommerce_db
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully # ĐỢI MIGRATION & SEED CHẠY XONG MỚI START APP
+    # Chạy ở chế độ dev (Hot-reload)
+    command: npm run start:dev 
+    volumes:
+      - .:/app               # Map toàn bộ source code từ máy vào container
+      - /app/node_modules    # Trick: Giữ nguyên node_modules của container, tránh xung đột OS
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
