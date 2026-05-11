@@ -1,161 +1,459 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
-export class InitSchema1680000000000 implements MigrationInterface {
-  name = 'InitSchema1680000000000';
+import type { Knex } from 'knex';
 
-  // ==========================================
-  // HÀM UP: CHẠY ĐỂ TẠO CƠ SỞ DỮ LIỆU
-  // ==========================================
-  public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
-            -- A. TẠO CÁC KIỂU DỮ LIỆU ENUM
-            CREATE TYPE auth_provider_enum AS ENUM ('local', 'google', 'facebook', 'apple');
-            CREATE TYPE order_status_enum AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
-            CREATE TYPE payment_method_enum AS ENUM ('cod', 'credit_card', 'bank_transfer', 'e_wallet', 'momo');
-            CREATE TYPE payment_status_enum AS ENUM ('pending', 'completed', 'failed', 'refunded');
+export const up = async (knex: Knex): Promise<void> => {
+  // =========================
+  // 1. ENUMS (PostgreSQL)
+  // =========================
+  await knex.raw(`
+    CREATE TYPE auth_provider_enum AS ENUM ('local', 'google', 'facebook', 'apple');
+    CREATE TYPE order_status_enum AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
+    CREATE TYPE payment_method_enum AS ENUM ('cod', 'credit_card', 'bank_transfer', 'e_wallet', 'momo');
+    CREATE TYPE payment_status_enum AS ENUM ('pending', 'completed', 'failed', 'refunded');
+    CREATE TYPE stock_log_action_enum AS ENUM ('in', 'out', 'adjustment');
+  `);
 
-            -- B. TẠO HÀM TỰ ĐỘNG CẬP NHẬT updated_at
-            CREATE OR REPLACE FUNCTION update_updated_at_column()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                NEW.updated_at = CURRENT_TIMESTAMP;
-                RETURN NEW;
-            END;
-            $$ LANGUAGE plpgsql;
+  // =========================
+  // 2. ROLES
+  // =========================
+  await knex.schema.createTable('roles', (table: Knex.TableBuilder): void => {
+    table.increments('id').primary();
+    table.string('name', 50).notNullable().unique();
+    table.text('description');
+    table.timestamps(true, true);
+  });
 
-            -- 1. ROLES
-            CREATE TABLE roles (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) NOT NULL UNIQUE,
-                description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TRIGGER update_roles_modtime BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  // =========================
+  // 3. USERS
+  // =========================
+  await knex.schema.createTable('users', (table: Knex.TableBuilder): void => {
+    table.increments('id').primary();
+    table.string('public_id', 50).notNullable().unique();
+    table.string('full_name', 100).notNullable();
+    table.index('full_name');
+    table.string('email', 100).notNullable().unique();
+    table.index('email');
+    table.string('password', 255);
 
-            -- 2. USERS
-            CREATE TABLE users (
-                id SERIAL PRIMARY KEY,
-                public_id VARCHAR(50) UNIQUE NOT NULL,
-                full_name VARCHAR(100) NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE,
-                password VARCHAR(255) NULL,
-                auth_provider auth_provider_enum DEFAULT 'local',
-                provider_id VARCHAR(255) NULL,
-                phone_number VARCHAR(20),
-                address TEXT,
-                current_hashed_refresh_token TEXT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                deleted_at TIMESTAMP NULL,
-                UNIQUE (auth_provider, provider_id)
-            );
-            CREATE TRIGGER update_users_modtime BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    table.string('phone_number', 20);
+    table.text('current_hashed_refresh_token');
 
-            -- 3. USER ROLES (N-N)
-            CREATE TABLE user_roles (
-                user_id INT REFERENCES users(id) ON DELETE CASCADE,
-                role_id INT REFERENCES roles(id) ON DELETE CASCADE,
-                PRIMARY KEY (user_id, role_id)
-            );
+    table.timestamps(true, true);
+    table.boolean('is_active').notNullable().defaultTo(true);
+    table.timestamp('deleted_at');
+  });
 
-            -- 4. CATEGORIES
-            CREATE TABLE categories (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TRIGGER update_categories_modtime BEFORE UPDATE ON categories FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  // =========================
+  // 4. USER ROLES
+  // =========================
+  await knex.schema.createTable(
+    'user_roles',
+    (table: Knex.TableBuilder): void => {
+      table
+        .integer('user_id')
+        .references('id')
+        .inTable('users')
+        .notNullable()
+        .onDelete('CASCADE');
+      table
+        .integer('role_id')
+        .references('id')
+        .inTable('roles')
+        .notNullable()
+        .onDelete('CASCADE');
+      table.primary(['user_id', 'role_id']);
+    },
+  );
 
-            -- 5. PRODUCTS
-            CREATE TABLE products (
-                id SERIAL PRIMARY KEY,
-                public_id VARCHAR(50) UNIQUE NOT NULL,
-                category_id INT REFERENCES categories(id) ON DELETE SET NULL,
-                name VARCHAR(255) NOT NULL,
-                description TEXT,
-                price DECIMAL(10, 2) NOT NULL CHECK (price >= 0),
-                stock_quantity INT DEFAULT 0 CHECK (stock_quantity >= 0),
-                image_url VARCHAR(255),
-                version INT NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                deleted_at TIMESTAMP NULL
-            );
-            CREATE TRIGGER update_products_modtime BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-            CREATE INDEX idx_products_category_id ON products(category_id);
+  // =========================
+  // USER AUTH PROVIDERS (supports multiple external providers per user)
+  // =========================
+  await knex.schema.createTable(
+    'user_auth_providers',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('user_id')
+        .references('id')
+        .inTable('users')
+        .notNullable()
+        .onDelete('CASCADE');
 
-            -- 6. ORDERS
-            CREATE TABLE orders (
-                id SERIAL PRIMARY KEY,
-                order_code VARCHAR(50) UNIQUE NOT NULL,
-                user_id INT REFERENCES users(id) ON DELETE CASCADE,
-                total_amount DECIMAL(10, 2) NOT NULL CHECK (total_amount >= 0),
-                status order_status_enum DEFAULT 'pending',
-                shipping_address TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                deleted_at TIMESTAMP NULL
-            );
-            CREATE TRIGGER update_orders_modtime BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-            CREATE INDEX idx_orders_user_id ON orders(user_id);
+      table
+        .enu('provider', null, {
+          useNative: true,
+          enumName: 'auth_provider_enum',
+        })
+        .notNullable();
 
-            -- 7. ORDER ITEMS
-            CREATE TABLE order_items (
-                id SERIAL PRIMARY KEY,
-                order_id INT REFERENCES orders(id) ON DELETE CASCADE,
-                product_id INT REFERENCES products(id) ON DELETE NO ACTION,
-                quantity INT NOT NULL CHECK (quantity > 0),
-                price_at_purchase DECIMAL(10, 2) NOT NULL CHECK (price_at_purchase >= 0),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (order_id, product_id)
-            );
-            CREATE INDEX idx_order_items_product_id ON order_items(product_id);
+      table.string('provider_id', 255).notNullable();
+      table.jsonb('provider_data');
 
-            -- 8. PAYMENTS
-            CREATE TABLE payments (
-                id SERIAL PRIMARY KEY,
-                public_id VARCHAR(50) UNIQUE NOT NULL,
-                order_id INT REFERENCES orders(id) ON DELETE CASCADE,
-                amount DECIMAL(10, 2) NOT NULL,
-                payment_method payment_method_enum NOT NULL,
-                payment_status payment_status_enum DEFAULT 'pending',
-                transaction_id VARCHAR(100) UNIQUE,
-                momo_trans_id VARCHAR(100),
-                paid_at TIMESTAMP NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TRIGGER update_payments_modtime BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-            CREATE INDEX idx_payments_order_id ON payments(order_id);
-        `);
-  }
+      table.timestamps(true, true);
 
-  // ==========================================
-  // HÀM DOWN: CHẠY KHI MUỐN ROLLBACK/HOÀN TÁC
-  // ==========================================
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
-            -- 1. Xóa các bảng theo thứ tự từ dưới lên trên (để không vi phạm Foreign Key)
-            DROP TABLE IF EXISTS payments CASCADE;
-            DROP TABLE IF EXISTS order_items CASCADE;
-            DROP TABLE IF EXISTS orders CASCADE;
-            DROP TABLE IF EXISTS products CASCADE;
-            DROP TABLE IF EXISTS categories CASCADE;
-            DROP TABLE IF EXISTS user_roles CASCADE;
-            DROP TABLE IF EXISTS users CASCADE;
-            DROP TABLE IF EXISTS roles CASCADE;
+      table.unique(['provider', 'provider_id']);
+      table.index('user_id');
+    },
+  );
 
-            -- 2. Xóa hàm trigger
-            DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+  // =========================
+  // 5. CATEGORIES (có tree)
+  // =========================
+  await knex.schema.createTable(
+    'categories',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table.string('name', 100).notNullable();
+      table.text('description');
+      table
+        .integer('parent_id')
+        .references('id')
+        .inTable('categories')
+        .onDelete('SET NULL');
 
-            -- 3. Xóa các kiểu dữ liệu ENUM
-            DROP TYPE IF EXISTS payment_status_enum CASCADE;
-            DROP TYPE IF EXISTS payment_method_enum CASCADE;
-            DROP TYPE IF EXISTS order_status_enum CASCADE;
-            DROP TYPE IF EXISTS auth_provider_enum CASCADE;
-        `);
-  }
-}
+      table.index('parent_id');
+      table.timestamps(true, true);
+      table.timestamp('deleted_at');
+    },
+  );
+
+  // =========================
+  // 6. USER ADDRESSES
+  // =========================
+  await knex.schema.createTable(
+    'user_addresses',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('user_id')
+        .references('id')
+        .inTable('users')
+        .notNullable()
+        .onDelete('CASCADE');
+
+      table.string('label', 50).notNullable();
+      table.string('recipient_name', 100).notNullable();
+      table.string('phone_number', 20).notNullable();
+      table.string('address_line', 255).notNullable();
+      table.string('ward', 100);
+      table.string('district', 100);
+      table.string('province', 100);
+      table.string('country', 100).notNullable().defaultTo('Vietnam');
+      table.string('postal_code', 20);
+      table.boolean('is_default').notNullable().defaultTo(false);
+      table.text('note');
+      table.timestamps(true, true);
+
+      table.index('user_id');
+    },
+  );
+
+  // =========================
+  // 7. PRODUCTS
+  // =========================
+  await knex.schema.createTable(
+    'products',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table.string('public_id', 50).notNullable().unique();
+
+      table
+        .integer('category_id')
+        .nullable()
+        .references('id')
+        .inTable('categories')
+        .onDelete('SET NULL');
+      table.string('name', 255).notNullable();
+      table.index('name');
+      table.string('slug').unique().index().notNullable();
+      table.text('description');
+
+      table
+        .decimal('price', 14, 2)
+        .checkBetween([0, 9999999999.99])
+        .notNullable()
+        .defaultTo(0);
+      table
+        .integer('stock_quantity')
+        .checkBetween([0, 9999999999])
+        .notNullable()
+        .defaultTo(0);
+
+      table.integer('version').notNullable().defaultTo(0);
+      table.boolean('is_active').notNullable().defaultTo(true);
+
+      table.timestamps(true, true);
+      table.timestamp('deleted_at');
+
+      table.index('category_id');
+    },
+  );
+
+  // =========================
+  // 8. PRODUCT ATTRIBUTES (biến thể / variants)
+  // =========================
+  await knex.schema.createTable(
+    'product_attributes',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('product_id')
+        .references('id')
+        .inTable('products')
+        .notNullable()
+        .onDelete('CASCADE');
+
+      table.string('attribute_name', 100).notNullable();
+      table.string('attribute_value', 255).notNullable();
+      table.string('sku', 100).unique();
+      table.decimal('price', 14, 2).checkBetween([0, 9999999999.99]).nullable();
+      table
+        .integer('stock_quantity')
+        .checkBetween([0, 9999999999])
+        .notNullable()
+        .defaultTo(0);
+      table.boolean('is_active').notNullable().defaultTo(true);
+      table.integer('sort_order').notNullable().defaultTo(0);
+      table.timestamps(true, true);
+
+      table.unique(['product_id', 'attribute_name', 'attribute_value']);
+      table.index('product_id');
+    },
+  );
+
+  // =========================
+  // 9. PRODUCT IMAGES (nếu muốn lưu nhiều ảnh cho mỗi sản phẩm)
+  // =========================
+  await knex.schema.createTable(
+    'product_images',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('product_id')
+        .references('id')
+        .inTable('products')
+        .onDelete('CASCADE');
+      table.string('image_url', 255).notNullable();
+      table.string('alt_text', 255);
+      table.integer('display_order').defaultTo(0);
+      table.timestamps(true, true);
+    },
+  );
+  // =========================
+  // 10. STOCK LOGS
+  // =========================
+  await knex.schema.createTable(
+    'stock_logs',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('product_id')
+        .references('id')
+        .inTable('products')
+        .notNullable()
+        .onDelete('CASCADE');
+      table
+        .integer('product_attribute_id')
+        .references('id')
+        .inTable('product_attributes')
+        .onDelete('CASCADE');
+      table
+        .integer('changed_by_user_id')
+        .references('id')
+        .inTable('users')
+        .onDelete('SET NULL');
+
+      table
+        .enu('action', null, {
+          useNative: true,
+          enumName: 'stock_log_action_enum',
+        })
+        .notNullable();
+
+      table.integer('quantity_change').notNullable();
+      table.integer('before_quantity').notNullable();
+      table.integer('after_quantity').notNullable();
+      table.text('reason');
+      table.timestamps(true, true);
+
+      table.index('product_id');
+      table.index('product_attribute_id');
+      table.index('changed_by_user_id');
+    },
+  );
+
+  // =========================
+  // 11. ORDERS
+  // =========================
+  await knex.schema.createTable('orders', (table: Knex.TableBuilder): void => {
+    table.increments('id').primary();
+    table.string('order_code', 50).notNullable().unique();
+
+    table
+      .integer('user_id')
+      .references('id')
+      .inTable('users')
+      .onDelete('CASCADE');
+
+    table.decimal('total_amount', 14, 2).notNullable();
+    table.string('customer_name', 100);
+    table.string('customer_phone', 20);
+
+    table
+      .enu('status', null, {
+        useNative: true,
+        enumName: 'order_status_enum',
+      })
+      .defaultTo('pending');
+
+    table.text('shipping_address').notNullable();
+
+    table.timestamps(true, true);
+    table.timestamp('deleted_at');
+    table.index('user_id');
+  });
+
+  // =========================
+  // 9. ORDER ITEMS
+  // =========================
+  await knex.schema.createTable(
+    'order_items',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+
+      table
+        .integer('order_id')
+        .references('id')
+        .inTable('orders')
+        .onDelete('CASCADE');
+      table
+        .integer('product_id')
+        .references('id')
+        .inTable('products')
+        .onDelete('RESTRICT');
+
+      table.integer('quantity').notNullable();
+      table.decimal('price_at_purchase', 14, 2).notNullable();
+
+      table.timestamps(true, true);
+
+      table.unique(['order_id', 'product_id']);
+      table.index('order_id');
+      table.index('product_id');
+    },
+  );
+
+  // =========================
+  // 13. PAYMENTS
+  // =========================
+  await knex.schema.createTable(
+    'payments',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table.string('public_id', 50).notNullable().unique();
+
+      table
+        .integer('order_id')
+        .references('id')
+        .inTable('orders')
+        .onDelete('CASCADE');
+
+      table.decimal('amount', 14, 2).notNullable();
+
+      table
+        .enu('payment_method', null, {
+          useNative: true,
+          enumName: 'payment_method_enum',
+        })
+        .notNullable();
+
+      table
+        .enu('payment_status', null, {
+          useNative: true,
+          enumName: 'payment_status_enum',
+        })
+        .defaultTo('pending');
+
+      table.string('transaction_id', 100).unique();
+      table.string('momo_trans_id', 100);
+      table.jsonb('provider_response');
+
+      table.timestamp('paid_at');
+
+      table.timestamps(true, true);
+
+      table.index('order_id');
+    },
+  );
+
+  // =========================
+  // 14. CARTS (Giỏ hàng)
+  // =========================
+  await knex.schema.createTable('carts', (table: Knex.TableBuilder): void => {
+    table.increments('id').primary();
+
+    // Liên kết với bảng người dùng.
+    // Dùng .unique() vì thông thường mỗi User chỉ có 1 giỏ hàng duy nhất (đang active).
+    table
+      .integer('user_id')
+      .references('id')
+      .inTable('users')
+      .onDelete('CASCADE')
+      .unique();
+
+    table.timestamps(true, true);
+  });
+
+  // =========================
+  // 15. CART ITEMS (Chi tiết sản phẩm trong giỏ)
+  // =========================
+  await knex.schema.createTable(
+    'cart_items',
+    (table: Knex.TableBuilder): void => {
+      table.increments('id').primary();
+      table
+        .integer('cart_id')
+        .references('id')
+        .inTable('carts')
+        .onDelete('CASCADE');
+      table
+        .integer('product_id')
+        .references('id')
+        .inTable('products')
+        .onDelete('RESTRICT');
+      table.integer('quantity').notNullable().defaultTo(1);
+
+      table.timestamps(true, true);
+      table.index('cart_id');
+      table.index('product_id');
+      table.unique(['cart_id', 'product_id']);
+    },
+  );
+};
+
+export const down = async (knex: Knex): Promise<void> => {
+  await knex.schema.dropTableIfExists('cart_items');
+  await knex.schema.dropTableIfExists('carts');
+  await knex.schema.dropTableIfExists('payments');
+  await knex.schema.dropTableIfExists('order_items');
+  await knex.schema.dropTableIfExists('orders');
+  await knex.schema.dropTableIfExists('product_images');
+  await knex.schema.dropTableIfExists('stock_logs');
+  await knex.schema.dropTableIfExists('product_attributes');
+  await knex.schema.dropTableIfExists('products');
+  await knex.schema.dropTableIfExists('user_addresses');
+  await knex.schema.dropTableIfExists('categories');
+  await knex.schema.dropTableIfExists('user_auth_providers');
+  await knex.schema.dropTableIfExists('user_roles');
+  await knex.schema.dropTableIfExists('users');
+  await knex.schema.dropTableIfExists('roles');
+
+  await knex.raw(`
+    DROP TYPE IF EXISTS payment_status_enum CASCADE;
+    DROP TYPE IF EXISTS payment_method_enum CASCADE;
+    DROP TYPE IF EXISTS order_status_enum CASCADE;
+    DROP TYPE IF EXISTS stock_log_action_enum CASCADE;
+    DROP TYPE IF EXISTS auth_provider_enum CASCADE;
+  `);
+};

@@ -1,92 +1,169 @@
-// src/seeds/seed.ts
-import { AppDataSource } from '../data-source';
-import { QueryRunner } from 'typeorm';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import knex from 'knex';
+
+const knexInstance = knex({
+  client: 'pg',
+  connection: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: process.env.DB_NAME || 'ecommerce',
+  },
+});
 
 async function seed(): Promise<void> {
-  await AppDataSource.initialize();
-
-  const queryRunner: QueryRunner = AppDataSource.createQueryRunner();
-
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
+  const trx = await knexInstance.transaction();
 
   try {
     // ===============================
     // 1. ROLES
     // ===============================
-    await queryRunner.query(`
-      INSERT INTO roles (name, description) VALUES
-      ('admin', 'Quản trị viên toàn quyền hệ thống'),
-      ('user', 'Người dùng')
-      ON CONFLICT (name) DO NOTHING;
-    `);
+    await trx('roles')
+      .insert([
+        { name: 'admin', description: 'Quản trị viên toàn quyền hệ thống' },
+        { name: 'user', description: 'Người dùng' },
+      ])
+      .onConflict('name')
+      .ignore();
 
     // ===============================
     // 2. USERS
     // ===============================
-    await queryRunner.query(`
-      INSERT INTO users (public_id, full_name, email, password, auth_provider, phone_number, address)
-      VALUES
-      ('usr_admin_999', 'Nguyễn Quản Trị', 'admin@ecommerce.com', '$2b$10$TbSnfMFcZswyI4aKMpE1vu2XGm22cdIyLQGlp4c8qA9uf2U4Kf.MK', 'local', '0901234567', 'Hà Nội, Việt Nam'),
-      ('usr_cust_001', 'Trần Khách Hàng', 'khachhang@gmail.com', '$2b$10$TbSnfMFcZswyI4aKMpE1vu2XGm22cdIyLQGlp4c8qA9uf2U4Kf.MK', 'local', '0987654321', 'TP.HCM, Việt Nam')
-      ON CONFLICT (email) DO NOTHING;
-    `);
+    await trx('users')
+      .insert([
+        {
+          public_id: 'usr_admin_999',
+          full_name: 'Nguyễn Quản Trị',
+          email: 'admin@ecommerce.com',
+          password:
+            '$2b$10$TbSnfMFcZswyI4aKMpE1vu2XGm22cdIyLQGlp4c8qA9uf2U4Kf.MK',
+          auth_provider: 'local',
+          phone_number: '0901234567',
+          address: 'Hà Nội, Việt Nam',
+        },
+        {
+          public_id: 'usr_cust_001',
+          full_name: 'Trần Khách Hàng',
+          email: 'khachhang@gmail.com',
+          password:
+            '$2b$10$TbSnfMFcZswyI4aKMpE1vu2XGm22cdIyLQGlp4c8qA9uf2U4Kf.MK',
+          auth_provider: 'local',
+          phone_number: '0987654321',
+          address: 'TP.HCM, Việt Nam',
+        },
+      ])
+      .onConflict('email')
+      .ignore();
 
     // ===============================
     // 3. USER ROLES
     // ===============================
-    await queryRunner.query(`
-      INSERT INTO user_roles (user_id, role_id)
-      SELECT u.id, r.id
-      FROM users u, roles r
-      WHERE u.email = 'admin@ecommerce.com' AND r.name = 'admin'
-      ON CONFLICT (user_id, role_id) DO NOTHING;;
-    `);
+    const adminUser = (await trx('users')
+      .where('email', 'admin@ecommerce.com')
+      .first()) as any;
+    const adminRole = (await trx('roles')
+      .where('name', 'admin')
+      .first()) as any;
 
-    await queryRunner.query(`
-      INSERT INTO user_roles (user_id, role_id)
-      SELECT u.id, r.id
-      FROM users u, roles r
-      WHERE u.email = 'khachhang@gmail.com' AND r.name = 'user'
-      ON CONFLICT (user_id, role_id) DO NOTHING;
-    `);
+    if (adminUser && adminRole) {
+      await trx('user_roles')
+        .insert({
+          user_id: adminUser.id,
+          role_id: adminRole.id,
+        })
+        .onConflict(['user_id', 'role_id'])
+        .ignore();
+    }
+
+    const customerUser = (await trx('users')
+      .where('email', 'khachhang@gmail.com')
+      .first()) as any;
+    const userRole = (await trx('roles').where('name', 'user').first()) as any;
+
+    if (customerUser && userRole) {
+      await trx('user_roles')
+        .insert({
+          user_id: customerUser.id,
+          role_id: userRole.id,
+        })
+        .onConflict(['user_id', 'role_id'])
+        .ignore();
+    }
 
     // ===============================
     // 4. CATEGORIES
     // ===============================
-    await queryRunner.query(`
-      INSERT INTO categories (name, description) VALUES
-      ('Điện thoại', 'Các dòng smartphone mới nhất'),
-      ('Laptop', 'Máy tính xách tay'),
-      ('Phụ kiện', 'Tai nghe, sạc'),
-      ('Đồng hồ thông minh', 'Smartwatch')
-      ON CONFLICT (name) DO NOTHING;
-    `);
+    await trx('categories')
+      .insert([
+        { name: 'Điện thoại', description: 'Các dòng smartphone mới nhất' },
+        { name: 'Laptop', description: 'Máy tính xách tay' },
+        { name: 'Phụ kiện', description: 'Tai nghe, sạc' },
+        { name: 'Đồng hồ thông minh', description: 'Smartwatch' },
+      ])
+      .onConflict('name')
+      .ignore();
 
     // ===============================
     // 5. PRODUCTS
     // ===============================
-    await queryRunner.query(`
-      INSERT INTO products (public_id, category_id, name, description, price, stock_quantity, image_url)
-      VALUES
-      ('prod_phone_001', (SELECT id FROM categories WHERE name='Điện thoại'), 'iPhone 15 Pro Max', 'Apple flagship', 1199.00, 50, '/images/iphone.jpg'),
-      ('prod_lap_001', (SELECT id FROM categories WHERE name='Laptop'), 'MacBook Pro M3', 'Laptop Apple', 1599.00, 15, '/images/macbook.jpg'),
-      ('prod_acc_001', (SELECT id FROM categories WHERE name='Phụ kiện'), 'AirPods Pro 2', 'Tai nghe Apple', 249.00, 200, '/images/airpods.jpg')
-      ON CONFLICT (public_id) DO NOTHING;
-    `);
+    const phoneCategory = (await trx('categories')
+      .where('name', 'Điện thoại')
+      .first()) as any;
+    const laptopCategory = (await trx('categories')
+      .where('name', 'Laptop')
+      .first()) as any;
+    const accessoryCategory = (await trx('categories')
+      .where('name', 'Phụ kiện')
+      .first()) as any;
+
+    if (phoneCategory && laptopCategory && accessoryCategory) {
+      await trx('products')
+        .insert([
+          {
+            public_id: 'prod_phone_001',
+            category_id: phoneCategory.id,
+            name: 'iPhone 15 Pro Max',
+            description: 'Apple flagship',
+            price: 1199.0,
+            stock_quantity: 50,
+            image_url: '/images/iphone.jpg',
+          },
+          {
+            public_id: 'prod_lap_001',
+            category_id: laptopCategory.id,
+            name: 'MacBook Pro M3',
+            description: 'Laptop Apple',
+            price: 1599.0,
+            stock_quantity: 15,
+            image_url: '/images/macbook.jpg',
+          },
+          {
+            public_id: 'prod_acc_001',
+            category_id: accessoryCategory.id,
+            name: 'AirPods Pro 2',
+            description: 'Tai nghe Apple',
+            price: 249.0,
+            stock_quantity: 200,
+            image_url: '/images/airpods.jpg',
+          },
+        ])
+        .onConflict('public_id')
+        .ignore();
+    }
 
     // ✅ commit nếu OK
-    await queryRunner.commitTransaction();
-
+    await trx.commit();
     console.log('✅ Seed data FULL done');
   } catch (error) {
     // ❌ rollback nếu lỗi
-    await queryRunner.rollbackTransaction();
+    await trx.rollback();
     console.error('❌ Seed failed:', error);
+    throw error;
   } finally {
-    // 🔥 luôn release
-    await queryRunner.release();
-    await AppDataSource.destroy();
+    // 🔥 luôn close connection
+    await knexInstance.destroy();
   }
 }
 
