@@ -16,7 +16,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           );
         }
 
-        return config;
+        return {
+          ...config,
+          synchronize: false,
+          // Tự động tìm và nạp các file có đuôi .entity.ts
+          autoLoadEntities: true,
+        };
       },
       inject: [ConfigService],
     }),

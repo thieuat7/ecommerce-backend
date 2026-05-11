@@ -6,7 +6,6 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { AuthProvider } from '@modules/users/entities/user.entity';
 
 export class CreateUserDto {
   @IsNotEmpty({ message: 'Họ và tên không được để trống' })
@@ -29,10 +28,6 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   address?: string;
-
-  @IsOptional()
-  @IsEnum(AuthProvider, { message: 'Nguồn đăng nhập không hợp lệ' })
-  auth_provider?: AuthProvider;
 
   @IsOptional()
   @IsString()

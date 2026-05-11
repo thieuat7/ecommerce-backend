@@ -80,12 +80,7 @@ export const up = async (knex: Knex): Promise<void> => {
         .notNullable()
         .onDelete('CASCADE');
 
-      table
-        .enu('provider', null, {
-          useNative: true,
-          enumName: 'auth_provider_enum',
-        })
-        .notNullable();
+      table.specificType('provider', 'auth_provider_enum').notNullable();
 
       table.string('provider_id', 255).notNullable();
       table.jsonb('provider_data');
@@ -143,6 +138,7 @@ export const up = async (knex: Knex): Promise<void> => {
       table.string('postal_code', 20);
       table.boolean('is_default').notNullable().defaultTo(false);
       table.text('note');
+      table.timestamp('deleted_at');
       table.timestamps(true, true);
 
       table.index('user_id');
@@ -264,12 +260,7 @@ export const up = async (knex: Knex): Promise<void> => {
         .inTable('users')
         .onDelete('SET NULL');
 
-      table
-        .enu('action', null, {
-          useNative: true,
-          enumName: 'stock_log_action_enum',
-        })
-        .notNullable();
+      table.specificType('action', 'stock_log_action_enum').notNullable();
 
       table.integer('quantity_change').notNullable();
       table.integer('before_quantity').notNullable();
@@ -300,12 +291,7 @@ export const up = async (knex: Knex): Promise<void> => {
     table.string('customer_name', 100);
     table.string('customer_phone', 20);
 
-    table
-      .enu('status', null, {
-        useNative: true,
-        enumName: 'order_status_enum',
-      })
-      .defaultTo('pending');
+    table.specificType('status', 'order_status_enum').defaultTo('pending');
 
     table.text('shipping_address').notNullable();
 
@@ -361,18 +347,10 @@ export const up = async (knex: Knex): Promise<void> => {
 
       table.decimal('amount', 14, 2).notNullable();
 
-      table
-        .enu('payment_method', null, {
-          useNative: true,
-          enumName: 'payment_method_enum',
-        })
-        .notNullable();
+      table.specificType('payment_method', 'payment_method_enum').notNullable();
 
       table
-        .enu('payment_status', null, {
-          useNative: true,
-          enumName: 'payment_status_enum',
-        })
+        .specificType('payment_status', 'payment_status_enum')
         .defaultTo('pending');
 
       table.string('transaction_id', 100).unique();

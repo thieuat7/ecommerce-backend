@@ -91,7 +91,7 @@ export class AuthService {
         fullName: user.fullName,
         roles: roleNames,
       },
-      accessToken, // Chuẩn camelCase cho API response
+      accessToken,
       refreshToken,
     };
   }

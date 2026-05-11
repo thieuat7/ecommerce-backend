@@ -18,9 +18,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "migration:run": "typeorm migration:run -d dist/data-source.js",
-    "seed:run": "node dist/seeds/seed.js",
-    "db:setup": "npm run migration:run && npm run seed:run"
+    "migrate:run": "knex migrate:latest",
+    "seed:run": "knex seed:run",
+    "db:setup": "npm run migrate:run && npm run seed:run"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

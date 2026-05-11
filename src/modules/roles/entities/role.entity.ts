@@ -30,14 +30,13 @@ export class Role {
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt: Date;
 
+  // TypeORM tự động cập nhật thời gian hiện tại lúc sửa
   @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
   })
   updatedAt: Date;
 
