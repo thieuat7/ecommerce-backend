@@ -10,11 +10,9 @@ import {
   JoinTable,
   BeforeInsert,
   Index,
-  OneToOne,
 } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-// Đảm bảo đường dẫn import này khớp với cấu trúc dự án của bạn
 import { Order } from '@modules/orders/entities/order.entity';
 import { Role } from '@modules/roles/entities/role.entity';
 

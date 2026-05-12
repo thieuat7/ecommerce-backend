@@ -1,3 +1,4 @@
+import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -13,6 +14,8 @@ import { CategoriesModule } from '@modules/categories/categories.module';
 import { PaymentsModule } from '@modules/payments/payments.module';
 
 import databaseConfig from '@database/database.config';
+import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
+import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
 
 @Module({
   imports: [
@@ -26,10 +29,14 @@ import databaseConfig from '@database/database.config';
     AuthModule,
     // ProductsModule,
     // OrdersModule,
-    // CategoriesModule,
+    CategoriesModule,
     // PaymentsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_FILTER, useClass: HttpExceptionFilter },
+  ],
 })
 export class AppModule {}

@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   BeforeInsert,
 } from 'typeorm';
 import { Category } from '@modules/categories/entities/category.entity';
+import { ProductImage } from './product-image.entity';
 import { v4 as uuidv4 } from 'uuid';
 
 @Entity('products')
@@ -23,12 +25,15 @@ export class Product {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
+  @Column({ type: 'varchar', length: 255, unique: true })
+  slug: string; // Thêm slug theo Migration
+
   @Column({ type: 'text', nullable: true })
   description: string;
 
   @Column({
     type: 'decimal',
-    precision: 10,
+    precision: 14, // Cập nhật từ 10 thành 14 theo Migration
     scale: 2,
     default: 0,
     transformer: {
@@ -41,8 +46,8 @@ export class Product {
   @Column({ name: 'stock_quantity', type: 'int', default: 0 })
   stockQuantity: number;
 
-  @Column({ name: 'image_url', type: 'varchar', length: 255, nullable: true })
-  imageUrl: string;
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean; // Thêm is_active theo Migration
 
   @Column({ type: 'int', default: 0 })
   version: number;
@@ -62,16 +67,21 @@ export class Product {
   updatedAt: Date;
 
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
-  deletedAt: Date;
+  deletedAt: Date | null;
 
   @Column({ name: 'category_id', nullable: true })
-  categoryId: number;
+  categoryId: number | null;
 
+  // Quan hệ với Category
   @ManyToOne(() => Category, (category) => category.products, {
     onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'category_id' })
-  category: Category;
+  category: Category | null;
+
+  // QUAN HỆ MỚI: Một sản phẩm có nhiều ảnh
+  @OneToMany(() => ProductImage, (image) => image.product)
+  images: ProductImage[];
 
   @BeforeInsert()
   generatePublicId() {
