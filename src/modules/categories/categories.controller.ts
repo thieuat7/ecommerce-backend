@@ -14,46 +14,48 @@ import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
+import { Category } from './entities/category.entity'; // <-- Thêm dòng này
 
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
-  // POST /categories
-  @Post()
-  @UseAuth('admin') // Chỉ admin mới được tạo danh mục
-  @HttpCode(HttpStatus.CREATED)
-  create(@Body() createCategoryDto: CreateCategoryDto) {
-    return this.categoriesService.create(createCategoryDto);
-  }
-
-  // GET /categories
+  // Lấy tất cả danh mục
   @Get()
-  findAll() {
-    return this.categoriesService.findAll();
+  async findAll(): Promise<Category[]> {
+    return await this.categoriesService.findAll();
   }
 
-  // GET /categories/:id
+  // Lấy một danh mục theo id
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.categoriesService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return await this.categoriesService.findOne(id);
   }
 
-  // PATCH /categories/:id
+  // Tạo danh mục mới
+  @Post()
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Body() createCategoryDto: CreateCategoryDto) {
+    return await this.categoriesService.create(createCategoryDto);
+  }
+
+  // Cập nhật danh mục
   @Patch(':id')
-  @UseAuth('admin') // Chỉ admin mới được cập nhật danh mục
-  update(
+  @UseAuth('admin')
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCategoryDto: UpdateCategoryDto,
   ) {
-    return this.categoriesService.update(id, updateCategoryDto);
+    return await this.categoriesService.update(id, updateCategoryDto);
   }
 
-  // DELETE /categories/:id
+  // Xóa danh mục
   @Delete(':id')
-  @UseAuth('admin') // Chỉ admin mới được xóa danh mục
+  @UseAuth('admin')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.categoriesService.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.categoriesService.remove(id);
+    return { message: 'Danh mục đã được xóa thành công.' };
   }
 }

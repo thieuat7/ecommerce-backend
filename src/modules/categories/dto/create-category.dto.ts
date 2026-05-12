@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  MaxLength,
+  IsInt,
+} from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString({ message: 'Tên danh mục phải là chuỗi ký tự.' })
@@ -9,4 +15,9 @@ export class CreateCategoryDto {
   @IsString({ message: 'Mô tả phải là chuỗi ký tự.' })
   @IsOptional()
   description?: string;
+
+  // Đã sửa: Chuyển sang kiểm tra số nguyên để khớp với Database và Entity
+  @IsInt({ message: 'ID danh mục cha phải là một số nguyên.' })
+  @IsOptional()
+  parentId?: number;
 }
