@@ -207,4 +207,15 @@ export class OrdersService {
     await this.ordersRepository.remove(order);
     return { message: 'Đã xóa đơn hàng thành công.' };
   }
+
+  async deleteOrderForAdmin(orderId: number): Promise<{ message: string }> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+    });
+    if (!order) {
+      throw new NotFoundException('Đơn hàng không tồn tại.');
+    }
+    await this.ordersRepository.remove(order);
+    return { message: 'Admin đã xóa đơn hàng thành công.' };
+  }
 }

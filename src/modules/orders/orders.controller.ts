@@ -97,4 +97,13 @@ export class OrdersController {
   ) {
     return await this.ordersService.removeByIdAndUserId(id, userId);
   }
+
+  // ─── QUYỀN ADMIN ─────────────────────────────────────────────
+
+  @UseAuth('admin')
+  @Delete('admin/:orderId')
+  @ApiOperation({ summary: 'Admin: Xóa đơn hàng' })
+  async deleteOrderForAdmin(@Param('orderId', ParseIntPipe) orderId: number) {
+    return await this.ordersService.deleteOrderForAdmin(orderId);
+  }
 }
