@@ -4,7 +4,6 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Response as ExpressResponse } from 'express';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
@@ -13,7 +12,6 @@ interface StandardResponse<T> {
   success: boolean;
   message: string;
   data: T | null;
-  statusCode: number;
   timestamp: string;
 }
 
@@ -26,11 +24,6 @@ export class ResponseInterceptor<T> implements NestInterceptor<
     context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<StandardResponse<T>> {
-    // 1. Định nghĩa kiểu ExpressResponse để truy cập statusCode an toàn
-    const ctx = context.switchToHttp();
-    const response = ctx.getResponse<ExpressResponse>();
-    const statusCode = response.statusCode;
-
     return next.handle().pipe(
       map((data: T): StandardResponse<T> => {
         let message = 'Success';
@@ -54,7 +47,6 @@ export class ResponseInterceptor<T> implements NestInterceptor<
         // 4. Trả về object với đầy đủ kiểu dữ liệu đã xác định
         return {
           success: true,
-          statusCode: statusCode,
           message: message,
           data: finalData,
           timestamp: new Date().toISOString(),

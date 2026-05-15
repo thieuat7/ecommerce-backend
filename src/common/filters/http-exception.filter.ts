@@ -54,7 +54,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // 4. Trả về phản hồi đã được định dạng chuẩn (Đã thêm statusCode)
     response.status(status).json({
       success: false,
-      statusCode: status, // Thêm trường statusCode vào đây
       message: message,
       data: null,
       timestamp: new Date().toISOString(),
