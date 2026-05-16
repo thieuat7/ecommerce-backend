@@ -13,6 +13,7 @@ import {
 import { Category } from '@modules/categories/entities/category.entity';
 import { ProductImage } from './product-image.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { ProductAttribute } from './product-attribute.entity';
 
 @Entity('products')
 export class Product {
@@ -26,14 +27,14 @@ export class Product {
   name: string;
 
   @Column({ type: 'varchar', length: 255, unique: true })
-  slug: string; // Thêm slug theo Migration
+  slug: string;
 
   @Column({ type: 'text', nullable: true })
   description: string;
 
   @Column({
     type: 'decimal',
-    precision: 14, // Cập nhật từ 10 thành 14 theo Migration
+    precision: 14,
     scale: 2,
     default: 0,
     transformer: {
@@ -79,6 +80,9 @@ export class Product {
   @JoinColumn({ name: 'category_id' })
   category: Category | null;
 
+  // Quan hệ với ProductAttribute
+  @OneToMany(() => ProductAttribute, (attr) => attr.product)
+  attributes: ProductAttribute[];
   // QUAN HỆ MỚI: Một sản phẩm có nhiều ảnh
   @OneToMany(() => ProductImage, (image) => image.product)
   images: ProductImage[];

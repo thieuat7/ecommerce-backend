@@ -3,7 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
-import { JwtPayload } from '@common/interfaces/auth.interface';
+import { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 @Injectable()
 export class RtStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
@@ -40,7 +40,7 @@ export class RtStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
       userId: payload.sub,
       email: payload.email,
       roles: payload.roles,
-      refreshToken, // Gắn raw token vào req.user để controller sử dụng
+      refreshToken,
     };
   }
 }

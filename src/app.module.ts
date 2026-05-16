@@ -27,7 +27,7 @@ import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
     DatabaseModule,
     UsersModule,
     AuthModule,
-    // ProductsModule,
+    ProductsModule,
     // OrdersModule,
     CategoriesModule,
     // PaymentsModule,

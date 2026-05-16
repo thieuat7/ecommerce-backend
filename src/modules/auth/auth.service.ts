@@ -3,12 +3,10 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { ConfigService } from '@nestjs/config';
 import { TokenService } from './token.service';
 
 @Injectable()
@@ -16,8 +14,6 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly tokenService: TokenService,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
   ) {}
 
   // 1. Đăng ký tài khoản
@@ -39,10 +35,8 @@ export class AuthService {
     });
 
     return {
-      message: 'Đăng ký tài khoản thành công. Vui lòng đăng nhập.',
       user: {
-        id: newUser.id,
-        publicId: newUser.publicId,
+        id: newUser.publicId,
         email: newUser.email,
         fullName: newUser.fullName,
       },

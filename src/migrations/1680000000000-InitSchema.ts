@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import type { Knex } from 'knex';
 
 export const up = async (knex: Knex): Promise<void> => {
@@ -154,37 +152,56 @@ export const up = async (knex: Knex): Promise<void> => {
       table.increments('id').primary();
       table.string('public_id', 50).notNullable().unique();
 
-      table
-        .integer('category_id')
-        .nullable()
-        .references('id')
-        .inTable('categories')
-        .onDelete('SET NULL');
       table.string('name', 255).notNullable();
       table.index('name');
-      table.string('slug').unique().index().notNullable();
+
+      table.string('slug').notNullable().unique();
+      table.index('slug');
+
       table.text('description');
 
       table
         .decimal('price', 14, 2)
-        .checkBetween([0, 9999999999.99])
         .notNullable()
-        .defaultTo(0);
+        .defaultTo(0)
+        .checkBetween([0, 9999999999.99]);
+
       table
         .integer('stock_quantity')
-        .checkBetween([0, 9999999999])
         .notNullable()
-        .defaultTo(0);
+        .defaultTo(0)
+        .checkBetween([0, 9999999999]);
 
       table.integer('version').notNullable().defaultTo(0);
+
       table.boolean('is_active').notNullable().defaultTo(true);
 
       table.timestamps(true, true);
       table.timestamp('deleted_at');
 
-      table.index('category_id');
+      table.index(['is_active', 'deleted_at']);
     },
   );
+  // =========================
+  // 7. PRODUCTS-CATEGORIES
+  // =========================
+  await knex.schema.createTable('product_categories', (table) => {
+    table.increments('id').primary();
+
+    table
+      .integer('product_id')
+      .references('id')
+      .inTable('products')
+      .onDelete('CASCADE');
+
+    table
+      .integer('category_id')
+      .references('id')
+      .inTable('categories')
+      .onDelete('CASCADE');
+
+    table.unique(['product_id', 'category_id']);
+  });
 
   // =========================
   // 8. PRODUCT ATTRIBUTES (biến thể / variants)

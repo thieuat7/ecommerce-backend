@@ -55,5 +55,25 @@ export async function seed(knex: Knex): Promise<void> {
       name: 'Máy tính xách tay',
       parent_id: electronics.id,
     });
+
+    await getOrCreateCategory(trx, {
+      name: 'Tablet',
+      parent_id: electronics.id,
+    });
+
+    await getOrCreateCategory(trx, {
+      name: 'Phụ kiện',
+      parent_id: electronics.id,
+    });
+
+    await getOrCreateCategory(trx, {
+      name: 'Tai nghe',
+      parent_id: electronics.id,
+    });
+
+    await getOrCreateCategory(trx, {
+      name: 'Sạc dự phòng',
+      parent_id: electronics.id,
+    });
   });
 }
