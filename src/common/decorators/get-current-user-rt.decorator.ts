@@ -1,6 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtPayloadWithRt } from '@common/interfaces/auth.interface';
+import { JwtPayloadWithRt } from '@modules/auth/interfaces/jwt-payload.interface';
 
 type RequestWithUserRt = Request & { user: JwtPayloadWithRt };
 

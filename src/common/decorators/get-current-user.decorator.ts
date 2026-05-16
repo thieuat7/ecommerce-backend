@@ -1,6 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
-import { RequestUser } from '@common/interfaces/auth.interface';
+import { RequestUser } from '@modules/auth/interfaces/jwt-payload.interface';
 
 // Định nghĩa kiểu Request có chứa user
 type RequestWithUser = Request & { user: RequestUser };

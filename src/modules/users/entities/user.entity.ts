@@ -29,7 +29,6 @@ export class User {
   })
   publicId: string;
 
-  // Tự động tạo UUID nếu chưa có trước khi lưu vào database
   @BeforeInsert()
   generatePublicId() {
     if (!this.publicId) {
@@ -37,7 +36,7 @@ export class User {
     }
   }
 
-  @Index() // Được đánh index trong Knex
+  @Index()
   @Column({
     name: 'full_name',
     type: 'varchar',
@@ -45,7 +44,7 @@ export class User {
   })
   fullName: string;
 
-  @Index() // Được đánh index trong Knex
+  @Index()
   @Column({
     type: 'varchar',
     length: 100,

@@ -9,12 +9,13 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { getTokens } from '@common/utils/jwt.util';
+import { TokenService } from './token.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly tokenService: TokenService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -70,29 +71,24 @@ export class AuthService {
     const roleNames = user.roles?.map((role) => role.name) || [];
 
     // Tạo bộ Access + Refresh token
-    const { accessToken, refreshToken } = await getTokens(
-      this.jwtService,
-      this.configService,
-      user.id,
-      user.email,
-      roleNames,
-    );
+    const { accessToken, refreshToken } =
+      await this.tokenService.generateTokens(user.id, user.email, roleNames);
 
     // Lưu hash của refresh token vào DB (Sử dụng hàm update đã tối ưu)
     const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
     await this.usersService.setCurrentRefreshToken(hashedRefreshToken, user.id);
 
     return {
-      message: 'Đăng nhập thành công',
       user: {
-        id: user.id,
-        publicId: user.publicId,
+        id: user.publicId,
         email: user.email,
         fullName: user.fullName,
         roles: roleNames,
       },
-      accessToken,
-      refreshToken,
+      token: {
+        accessToken,
+        refreshToken,
+      },
     };
   }
 
@@ -121,13 +117,8 @@ export class AuthService {
     const roleNames = user.roles?.map((role) => role.name) || [];
 
     // Tạo bộ token mới
-    const { accessToken, refreshToken: newRefreshToken } = await getTokens(
-      this.jwtService,
-      this.configService,
-      user.id,
-      user.email,
-      roleNames,
-    );
+    const { accessToken, refreshToken: newRefreshToken } =
+      await this.tokenService.generateTokens(user.id, user.email, roleNames);
 
     // Cập nhật lại hash mới vào DB
     const hashedRefreshToken = await bcrypt.hash(newRefreshToken, 10);
