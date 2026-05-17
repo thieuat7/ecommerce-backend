@@ -65,7 +65,7 @@ export const up = async (knex: Knex): Promise<void> => {
   );
 
   // =========================
-  // USER AUTH PROVIDERS (supports multiple external providers per user)
+  // USER AUTH PROVIDERS
   // =========================
   await knex.schema.createTable(
     'user_auth_providers',
@@ -91,7 +91,7 @@ export const up = async (knex: Knex): Promise<void> => {
   );
 
   // =========================
-  // 5. CATEGORIES (có tree)
+  // 5. CATEGORIES (có cây phân cấp)
   // =========================
   await knex.schema.createTable(
     'categories',
@@ -144,7 +144,7 @@ export const up = async (knex: Knex): Promise<void> => {
   );
 
   // =========================
-  // 7. PRODUCTS
+  // 7. PRODUCTS (sản phẩm cơ bản)
   // =========================
   await knex.schema.createTable(
     'products',
@@ -160,17 +160,12 @@ export const up = async (knex: Knex): Promise<void> => {
 
       table.text('description');
 
+      // Giá gốc mặc định, có thể bị ghi đè bởi variant
       table
         .decimal('price', 14, 2)
         .notNullable()
         .defaultTo(0)
         .checkBetween([0, 9999999999.99]);
-
-      table
-        .integer('stock_quantity')
-        .notNullable()
-        .defaultTo(0)
-        .checkBetween([0, 9999999999]);
 
       table.integer('version').notNullable().defaultTo(0);
 
@@ -182,61 +177,98 @@ export const up = async (knex: Knex): Promise<void> => {
       table.index(['is_active', 'deleted_at']);
     },
   );
+
   // =========================
-  // 7. PRODUCTS-CATEGORIES
+  // 8. ATTRIBUTES (định nghĩa loại thuộc tính: Màu sắc, Dung lượng, Kích cỡ...)
+  // =========================
+  await knex.schema.createTable('attributes', (table) => {
+    table.increments('id').primary();
+    table.string('name', 100).notNullable().unique(); // Ví dụ: 'color', 'storage'
+    table.string('display_name', 100).notNullable(); // Ví dụ: 'Màu sắc', 'Bộ nhớ'
+    table.timestamps(true, true);
+  });
+
+  // =========================
+  // 9. ATTRIBUTE_VALUES (giá trị cụ thể của từng loại thuộc tính)
+  // =========================
+  await knex.schema.createTable('attribute_values', (table) => {
+    table.increments('id').primary();
+    table
+      .integer('attribute_id')
+      .references('id')
+      .inTable('attributes')
+      .notNullable()
+      .onDelete('CASCADE');
+    table.string('value', 255).notNullable(); // 'red', '64GB'
+    table.string('display_value', 255).notNullable(); // 'Đỏ', '64 GB'
+    table.integer('sort_order').defaultTo(0);
+    table.timestamps(true, true);
+    table.unique(['attribute_id', 'value']);
+  });
+
+  // =========================
+  // 10. PRODUCT VARIANTS (mỗi dòng là một biến thể hoàn chỉnh)
+  // =========================
+  await knex.schema.createTable('product_variants', (table) => {
+    table.increments('id').primary();
+    table
+      .integer('product_id')
+      .references('id')
+      .inTable('products')
+      .notNullable()
+      .onDelete('CASCADE');
+    table.string('sku', 100).notNullable().unique(); // Mã SKU riêng cho biến thể
+    table.decimal('price', 14, 2).notNullable(); // NULL => lấy giá từ products.price
+    table.integer('stock_quantity').notNullable().defaultTo(0);
+    table.integer('version').notNullable().defaultTo(0);
+    table.boolean('is_active').notNullable().defaultTo(true);
+    table.timestamps(true, true);
+    table.string('option_hash').notNullable();
+    table.unique(['product_id', 'option_hash']);
+    table.index('product_id');
+  });
+
+  // =========================
+  // 11. PRODUCT VARIANT OPTIONS (liên kết variant với các attribute_value)
+  // =========================
+  await knex.schema.createTable('product_variant_options', (table) => {
+    table.increments('id').primary();
+    table
+      .integer('variant_id')
+      .references('id')
+      .inTable('product_variants')
+      .notNullable()
+      .onDelete('CASCADE');
+    table
+      .integer('attribute_value_id')
+      .references('id')
+      .inTable('attribute_values')
+      .notNullable()
+      .onDelete('RESTRICT');
+    table.unique(['variant_id', 'attribute_value_id']);
+    table.index('variant_id');
+  });
+
+  // =========================
+  // 12. PRODUCTS - CATEGORIES (quan hệ nhiều-nhiều)
   // =========================
   await knex.schema.createTable('product_categories', (table) => {
     table.increments('id').primary();
-
     table
       .integer('product_id')
       .references('id')
       .inTable('products')
       .onDelete('CASCADE');
-
     table
       .integer('category_id')
       .references('id')
       .inTable('categories')
       .onDelete('CASCADE');
-
     table.unique(['product_id', 'category_id']);
   });
 
   // =========================
-  // 8. PRODUCT ATTRIBUTES (biến thể / variants)
-  // =========================
-  await knex.schema.createTable(
-    'product_attributes',
-    (table: Knex.TableBuilder): void => {
-      table.increments('id').primary();
-      table
-        .integer('product_id')
-        .references('id')
-        .inTable('products')
-        .notNullable()
-        .onDelete('CASCADE');
-
-      table.string('attribute_name', 100).notNullable();
-      table.string('attribute_value', 255).notNullable();
-      table.string('sku', 100).unique();
-      table.decimal('price', 14, 2).checkBetween([0, 9999999999.99]).nullable();
-      table
-        .integer('stock_quantity')
-        .checkBetween([0, 9999999999])
-        .notNullable()
-        .defaultTo(0);
-      table.boolean('is_active').notNullable().defaultTo(true);
-      table.integer('sort_order').notNullable().defaultTo(0);
-      table.timestamps(true, true);
-
-      table.unique(['product_id', 'attribute_name', 'attribute_value']);
-      table.index('product_id');
-    },
-  );
-
-  // =========================
-  // 9. PRODUCT IMAGES (nếu muốn lưu nhiều ảnh cho mỗi sản phẩm)
+  // 13. PRODUCT IMAGES (nhiều ảnh cho mỗi sản phẩm)
   // =========================
   await knex.schema.createTable(
     'product_images',
@@ -245,7 +277,7 @@ export const up = async (knex: Knex): Promise<void> => {
       table
         .integer('product_id')
         .references('id')
-        .inTable('products')
+        .inTable('product_variants')
         .onDelete('CASCADE');
       table.string('image_url', 255).notNullable();
       table.string('alt_text', 255);
@@ -253,13 +285,15 @@ export const up = async (knex: Knex): Promise<void> => {
       table.timestamps(true, true);
     },
   );
+
   // =========================
-  // 10. STOCK LOGS
+  // 14. STOCK LOGS (lịch sử thay đổi tồn kho, cho cả product và variant)
   // =========================
   await knex.schema.createTable(
     'stock_logs',
     (table: Knex.TableBuilder): void => {
       table.increments('id').primary();
+      // Có thể log cho product tổng hoặc variant cụ thể
       table
         .integer('product_id')
         .references('id')
@@ -267,9 +301,9 @@ export const up = async (knex: Knex): Promise<void> => {
         .notNullable()
         .onDelete('CASCADE');
       table
-        .integer('product_attribute_id')
+        .integer('variant_id')
         .references('id')
-        .inTable('product_attributes')
+        .inTable('product_variants')
         .onDelete('CASCADE');
       table
         .integer('changed_by_user_id')
@@ -286,13 +320,13 @@ export const up = async (knex: Knex): Promise<void> => {
       table.timestamps(true, true);
 
       table.index('product_id');
-      table.index('product_attribute_id');
+      table.index('variant_id');
       table.index('changed_by_user_id');
     },
   );
 
   // =========================
-  // 11. ORDERS
+  // 15. ORDERS
   // =========================
   await knex.schema.createTable('orders', (table: Knex.TableBuilder): void => {
     table.increments('id').primary();
@@ -318,7 +352,7 @@ export const up = async (knex: Knex): Promise<void> => {
   });
 
   // =========================
-  // 9. ORDER ITEMS
+  // 16. ORDER ITEMS (chi tiết đơn hàng, có thể chứa variant)
   // =========================
   await knex.schema.createTable(
     'order_items',
@@ -335,20 +369,28 @@ export const up = async (knex: Knex): Promise<void> => {
         .references('id')
         .inTable('products')
         .onDelete('RESTRICT');
+      // Thêm variant_id, có thể null nếu sản phẩm không có biến thể
+      table
+        .integer('variant_id')
+        .references('id')
+        .inTable('product_variants')
+        .onDelete('RESTRICT');
 
       table.integer('quantity').notNullable();
-      table.decimal('price_at_purchase', 14, 2).notNullable();
+      table.decimal('price_at_purchase', 14, 2).notNullable(); // Giá tại thời điểm mua
 
       table.timestamps(true, true);
 
-      table.unique(['order_id', 'product_id']);
+      // Ràng buộc: nếu có variant_id thì product_id phải trùng với product_id của variant đó
+      // Có thể dùng trigger hoặc kiểm tra ở ứng dụng, ở đây chỉ tạo index
       table.index('order_id');
       table.index('product_id');
+      table.index('variant_id');
     },
   );
 
   // =========================
-  // 13. PAYMENTS
+  // 17. PAYMENTS
   // =========================
   await knex.schema.createTable(
     'payments',
@@ -383,25 +425,21 @@ export const up = async (knex: Knex): Promise<void> => {
   );
 
   // =========================
-  // 14. CARTS (Giỏ hàng)
+  // 18. CARTS (giỏ hàng, mỗi user một giỏ)
   // =========================
   await knex.schema.createTable('carts', (table: Knex.TableBuilder): void => {
     table.increments('id').primary();
-
-    // Liên kết với bảng người dùng.
-    // Dùng .unique() vì thông thường mỗi User chỉ có 1 giỏ hàng duy nhất (đang active).
     table
       .integer('user_id')
       .references('id')
       .inTable('users')
       .onDelete('CASCADE')
-      .unique();
-
+      .unique(); // Mỗi user chỉ có một giỏ hàng
     table.timestamps(true, true);
   });
 
   // =========================
-  // 15. CART ITEMS (Chi tiết sản phẩm trong giỏ)
+  // 19. CART ITEMS (sản phẩm trong giỏ, hỗ trợ variant)
   // =========================
   await knex.schema.createTable(
     'cart_items',
@@ -417,25 +455,37 @@ export const up = async (knex: Knex): Promise<void> => {
         .references('id')
         .inTable('products')
         .onDelete('RESTRICT');
+      table
+        .integer('variant_id')
+        .references('id')
+        .inTable('product_variants')
+        .onDelete('RESTRICT');
       table.integer('quantity').notNullable().defaultTo(1);
 
       table.timestamps(true, true);
       table.index('cart_id');
       table.index('product_id');
-      table.unique(['cart_id', 'product_id']);
+      table.index('variant_id');
+      // Đảm bảo mỗi giỏ chỉ có một dòng cho mỗi product+variant
+      table.unique(['cart_id', 'product_id', 'variant_id']);
     },
   );
 };
 
 export const down = async (knex: Knex): Promise<void> => {
+  // Xóa theo thứ tự ngược lại, tránh lỗi khóa ngoại
   await knex.schema.dropTableIfExists('cart_items');
   await knex.schema.dropTableIfExists('carts');
   await knex.schema.dropTableIfExists('payments');
   await knex.schema.dropTableIfExists('order_items');
   await knex.schema.dropTableIfExists('orders');
-  await knex.schema.dropTableIfExists('product_images');
   await knex.schema.dropTableIfExists('stock_logs');
-  await knex.schema.dropTableIfExists('product_attributes');
+  await knex.schema.dropTableIfExists('product_images');
+  await knex.schema.dropTableIfExists('product_categories');
+  await knex.schema.dropTableIfExists('product_variant_options');
+  await knex.schema.dropTableIfExists('product_variants');
+  await knex.schema.dropTableIfExists('attribute_values');
+  await knex.schema.dropTableIfExists('attributes');
   await knex.schema.dropTableIfExists('products');
   await knex.schema.dropTableIfExists('user_addresses');
   await knex.schema.dropTableIfExists('categories');
@@ -444,6 +494,7 @@ export const down = async (knex: Knex): Promise<void> => {
   await knex.schema.dropTableIfExists('users');
   await knex.schema.dropTableIfExists('roles');
 
+  // Xóa các kiểu ENUM
   await knex.raw(`
     DROP TYPE IF EXISTS payment_status_enum CASCADE;
     DROP TYPE IF EXISTS payment_method_enum CASCADE;

@@ -12,7 +12,7 @@ type StockLogRow = IdRow & {
   product_attribute_id: number;
   action: string;
 };
-type ProductCategoryRow = { 
+type ProductCategoryRow = {
   product_id: number;
   category_id: number;
 };
