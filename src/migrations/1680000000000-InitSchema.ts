@@ -275,7 +275,7 @@ export const up = async (knex: Knex): Promise<void> => {
     (table: Knex.TableBuilder): void => {
       table.increments('id').primary();
       table
-        .integer('product_id')
+        .integer('variant_id')
         .references('id')
         .inTable('product_variants')
         .onDelete('CASCADE');

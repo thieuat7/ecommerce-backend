@@ -1,5 +1,6 @@
 import { Knex } from 'knex';
 
+// Thứ tự TRUNCATE: con trước, cha sau (tránh lỗi FK)
 const TABLES_TO_TRUNCATE = [
   'cart_items',
   'carts',
@@ -8,7 +9,11 @@ const TABLES_TO_TRUNCATE = [
   'orders',
   'stock_logs',
   'product_images',
-  'product_attributes',
+  'product_variant_options',
+  'product_variants',
+  'product_categories',
+  'attribute_values',
+  'attributes',
   'products',
   'user_addresses',
   'categories',
@@ -44,6 +49,7 @@ export async function seed(knex: Knex): Promise<void> {
     ).join(', ')} RESTART IDENTITY CASCADE`;
 
     await trx.raw(truncateSql);
+    console.log('[01_roles] Truncated all tables.');
 
     await trx('roles')
       .insert([
@@ -52,5 +58,7 @@ export async function seed(knex: Knex): Promise<void> {
       ])
       .onConflict('name')
       .merge(['description']);
+
+    console.log('[01_roles] Seeded roles: admin, user.');
   });
 }
