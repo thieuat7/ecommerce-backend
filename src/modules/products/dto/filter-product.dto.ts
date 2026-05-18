@@ -5,9 +5,11 @@ import {
   IsString,
   IsInt,
   IsNumber,
+  IsBoolean,
   Min,
   IsIn,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class FilterProductDto {
   // ─── TÌM KIẾM ──────────────────────────────────────────────────────────────
@@ -27,6 +29,17 @@ export class FilterProductDto {
   @Min(1)
   categoryId?: number;
 
+  // ─── LỌC THEO TRẠNG THÁI ───────────────────────────────────────────────────
+  @ApiPropertyOptional({ example: true, description: 'Lọc theo trạng thái hoạt động' })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  isActive?: boolean;
+
   // ─── LỌC THEO KHOẢNG GIÁ ───────────────────────────────────────────────────
   @ApiPropertyOptional({ example: 0, description: 'Giá tối thiểu' })
   @IsOptional()
@@ -35,35 +48,23 @@ export class FilterProductDto {
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ example: 5000000, description: 'Giá tối đa' })
+  @ApiPropertyOptional({ example: 50000000, description: 'Giá tối đa' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   maxPrice?: number;
 
-  // ─── LỌC THEO TỒN KHO ──────────────────────────────────────────────────────
-  @ApiPropertyOptional({
-    example: 1,
-    description: 'Số lượng tồn kho tối thiểu',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  minStock?: number;
-
   // ─── SẮP XẾP ───────────────────────────────────────────────────────────────
   @ApiPropertyOptional({
-    example: 'price',
-    description:
-      'Sắp xếp theo trường (price | name | createdAt | stockQuantity)',
-    enum: ['price', 'name', 'createdAt', 'stockQuantity'],
+    example: 'createdAt',
+    description: 'Sắp xếp theo trường (price | name | createdAt)',
+    enum: ['price', 'name', 'createdAt'],
   })
   @IsOptional()
   @IsString()
-  @IsIn(['price', 'name', 'createdAt', 'stockQuantity'])
-  sortBy?: 'price' | 'name' | 'createdAt' | 'stockQuantity' = 'createdAt';
+  @IsIn(['price', 'name', 'createdAt'])
+  sortBy?: 'price' | 'name' | 'createdAt' = 'createdAt';
 
   @ApiPropertyOptional({
     example: 'DESC',
@@ -76,10 +77,7 @@ export class FilterProductDto {
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
 
   // ─── PHÂN TRANG ─────────────────────────────────────────────────────────────
-  @ApiPropertyOptional({
-    example: 1,
-    description: 'Trang hiện tại (bắt đầu từ 1)',
-  })
+  @ApiPropertyOptional({ example: 1, description: 'Trang hiện tại (bắt đầu từ 1)' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

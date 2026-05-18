@@ -8,6 +8,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  ManyToMany,
 } from 'typeorm';
 import { Product } from '@modules/products/entities/product.entity';
 
@@ -50,11 +51,11 @@ export class Category {
     onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'parent_id' })
-  parent: Category | null; // Đã thêm | null
+  parent: Category | null;
 
   @OneToMany(() => Category, (category) => category.parent)
   children: Category[];
 
-  @OneToMany(() => Product, (product) => product.category)
+  @ManyToMany(() => Product, (product) => product.categories)
   products: Product[];
 }

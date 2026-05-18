@@ -1,34 +1,35 @@
-import { IsString, IsNumber, IsOptional, IsInt, Min } from 'class-validator';
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsBoolean,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateProductDto {
-  @ApiProperty({ example: 'iPhone 15 Pro' })
+  @ApiProperty({ example: 'iPhone 15 Pro Max', description: 'Tên sản phẩm' })
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
   name: string;
 
-  @ApiProperty({ example: 'Mô tả sản phẩm...', required: false })
-  @IsString()
+  @ApiPropertyOptional({ example: 'Mô tả sản phẩm...', description: 'Mô tả' })
   @IsOptional()
+  @IsString()
   description?: string;
 
-  @ApiProperty({ example: 1000 })
+  @ApiProperty({ example: 29990000, description: 'Giá cơ bản (base price)' })
   @IsNumber()
   @Min(0)
+  @Type(() => Number)
   price: number;
 
-  @ApiProperty({ example: 50 })
-  @IsInt()
-  @Min(0)
-  stockQuantity: number;
-
-  @ApiProperty({ example: 'https://image.com/product.jpg', required: false })
-  @IsString()
+  @ApiPropertyOptional({ example: true, description: 'Trạng thái hiển thị' })
   @IsOptional()
-  imageUrl?: string;
-
-  @ApiProperty({ example: 1 })
-  @IsInt()
-  categoryId: number;
+  @IsBoolean()
+  isActive?: boolean;
 }
-
-export class UpdateProductDto extends PartialType(CreateProductDto) {}

@@ -5,15 +5,15 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  ManyToOne,
   OneToMany,
-  JoinColumn,
   BeforeInsert,
+  JoinTable,
+  ManyToMany,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { Category } from '@modules/categories/entities/category.entity';
 import { ProductImage } from './product-image.entity';
-import { v4 as uuidv4 } from 'uuid';
-import { ProductAttribute } from './product-attribute.entity';
+import { ProductVariant } from '@modules/variant/entities/product_variant.entity';
 
 @Entity('products')
 export class Product {
@@ -30,7 +30,7 @@ export class Product {
   slug: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column({
     type: 'decimal',
@@ -44,14 +44,11 @@ export class Product {
   })
   price: number;
 
-  @Column({ name: 'stock_quantity', type: 'int', default: 0 })
-  stockQuantity: number;
-
-  @Column({ name: 'is_active', type: 'boolean', default: true })
-  isActive: boolean; // Thêm is_active theo Migration
-
   @Column({ type: 'int', default: 0 })
   version: number;
+
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
 
   @CreateDateColumn({
     name: 'created_at',
@@ -70,25 +67,28 @@ export class Product {
   @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
   deletedAt: Date | null;
 
-  @Column({ name: 'category_id', nullable: true })
-  categoryId: number | null;
+  // ── Relations ──────────────────────────────────────────────────────────────
 
-  // Quan hệ với Category
-  @ManyToOne(() => Category, (category) => category.products, {
-    onDelete: 'SET NULL',
+  @ManyToMany(() => Category, (category) => category.products)
+  @JoinTable({
+    name: 'product_categories',
+    joinColumn: { name: 'product_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'category_id', referencedColumnName: 'id' },
   })
-  @JoinColumn({ name: 'category_id' })
-  category: Category | null;
+  categories: Category[];
 
-  // Quan hệ với ProductAttribute
-  @OneToMany(() => ProductAttribute, (attr) => attr.product)
-  attributes: ProductAttribute[];
-  // QUAN HỆ MỚI: Một sản phẩm có nhiều ảnh
+  @OneToMany(() => ProductVariant, (variant) => variant.product)
+  variants: ProductVariant[];
+
   @OneToMany(() => ProductImage, (image) => image.product)
   images: ProductImage[];
 
+  // ── Hooks ──────────────────────────────────────────────────────────────────
+
   @BeforeInsert()
   generatePublicId() {
-    this.publicId = uuidv4();
+    if (!this.publicId) {
+      this.publicId = uuidv4();
+    }
   }
 }

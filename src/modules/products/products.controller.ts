@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -11,151 +12,131 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { ProductsService, PaginatedProducts } from './products.service';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ProductsService, PaginatedResult } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
+import { AddProductImageDto, UpdateImageOrderDto } from './dto/product-image.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 import { Product } from './entities/product.entity';
+import { ProductImage } from './entities/product-image.entity';
 
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  // ---------------- PUBLIC ROUTES ----------------
-  // Bất kỳ ai cũng có thể xem sản phẩm (Không dùng @UseAuth)
+  // ══════════════════════════════════════════════
+  //  PUBLIC ROUTES
+  // ══════════════════════════════════════════════
 
   @Get()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lấy danh sách sản phẩm (có phân trang)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Danh sách sản phẩm kèm thông tin phân trang',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Trang hiện tại (mặc định 1)',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Số sản phẩm mỗi trang (mặc định 10)',
-    example: 10,
-  })
-  @ApiQuery({
-    name: 'categoryId',
-    required: false,
-    description: 'Lọc theo ID danh mục',
-    example: 2,
-  })
-  findAll(
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('categoryId') categoryId?: number,
-  ): Promise<PaginatedProducts> {
-    return this.productsService.findAll(
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 10,
-      categoryId ? Number(categoryId) : undefined,
-    );
-  }
-
-  @Get('filter')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lọc & tìm kiếm sản phẩm (có phân trang)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Danh sách sản phẩm đã lọc kèm thông tin phân trang',
-  })
-  @ApiQuery({
-    name: 'name',
-    required: false,
-    description: 'Tìm theo tên sản phẩm',
-  })
-  @ApiQuery({ name: 'categoryId', required: false, description: 'ID danh mục' })
-  @ApiQuery({ name: 'minPrice', required: false, description: 'Giá tối thiểu' })
-  @ApiQuery({ name: 'maxPrice', required: false, description: 'Giá tối đa' })
-  @ApiQuery({
-    name: 'minStock',
-    required: false,
-    description: 'Tồn kho tối thiểu',
-  })
-  @ApiQuery({
-    name: 'sortBy',
-    required: false,
-    enum: ['price', 'name', 'createdAt', 'stockQuantity'],
-    description: 'Trường sắp xếp',
-  })
-  @ApiQuery({
-    name: 'sortOrder',
-    required: false,
-    enum: ['ASC', 'DESC'],
-    description: 'Chiều sắp xếp',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Trang (mặc định 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Số bản ghi/trang (mặc định 10)',
-  })
-  filterProducts(
-    @Query() filterDto: FilterProductDto,
-  ): Promise<PaginatedProducts> {
-    return this.productsService.findWithFilter(filterDto);
+  @ApiOperation({ summary: 'Danh sách sản phẩm (lọc + phân trang)' })
+  findAll(@Query() filterDto: FilterProductDto): Promise<PaginatedResult<Product>> {
+    return this.productsService.findAll(filterDto);
   }
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Lấy thông tin một sản phẩm theo ID' })
-  @ApiResponse({ status: 200, description: 'Thông tin sản phẩm' })
+  @ApiOperation({ summary: 'Chi tiết sản phẩm (kèm variants, images, categories)' })
   @ApiResponse({ status: 404, description: 'Sản phẩm không tồn tại' })
   findOne(@Param('id', ParseIntPipe) id: number): Promise<Product> {
     return this.productsService.findOne(id);
   }
 
-  // ---------------- ADMIN ONLY ROUTES ----------------
-  // Chỉ tài khoản có role 'admin' mới được thực hiện
+  // ══════════════════════════════════════════════
+  //  ADMIN ONLY ROUTES
+  // ══════════════════════════════════════════════
 
-  @UseAuth('admin')
   @Post()
+  @UseAuth('admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Tạo sản phẩm mới (Admin only)' })
-  @ApiResponse({ status: 201, description: 'Sản phẩm được tạo thành công' })
-  @ApiResponse({
-    status: 403,
-    description: 'Bạn không có quyền thực hiện hành động này',
-  })
-  create(@Body() createProductDto: CreateProductDto): Promise<Product> {
-    return this.productsService.create(createProductDto);
+  create(@Body() dto: CreateProductDto): Promise<Product> {
+    return this.productsService.create(dto);
   }
 
+  @Put(':id')
   @UseAuth('admin')
-  @Patch(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cập nhật thông tin sản phẩm theo ID (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
-  @ApiResponse({ status: 404, description: 'Sản phẩm không tồn tại' })
+  @ApiOperation({
+    summary: 'Cập nhật sản phẩm (Admin only) – Cần gửi version hiện tại',
+  })
+  @ApiResponse({ status: 409, description: 'Xung đột phiên bản (optimistic lock)' })
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateProductDto: UpdateProductDto,
+    @Body() dto: UpdateProductDto,
   ): Promise<Product> {
-    return this.productsService.update(id, updateProductDto);
+    return this.productsService.update(id, dto);
   }
 
-  @UseAuth('admin')
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Xóa sản phẩm theo ID (Admin only)' })
-  @ApiResponse({ status: 204, description: 'Xóa thành công' })
-  remove(@Param('id', ParseIntPipe) id: number): Promise<{ message: string }> {
-    return this.productsService.remove(id);
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xóa mềm sản phẩm (Admin only)' })
+  softDelete(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ message: string }> {
+    return this.productsService.softDelete(id);
+  }
+
+  // ── Quản lý categories ──────────────────────────────────────────────────────
+
+  @Post(':id/categories')
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gắn category vào sản phẩm (Admin only)' })
+  addCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('categoryId', ParseIntPipe) categoryId: number,
+  ): Promise<Product> {
+    return this.productsService.addCategory(id, categoryId);
+  }
+
+  @Delete(':id/categories/:categoryId')
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gỡ category khỏi sản phẩm (Admin only)' })
+  removeCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+  ): Promise<Product> {
+    return this.productsService.removeCategory(id, categoryId);
+  }
+
+  // ── Quản lý ảnh (cấp product) ───────────────────────────────────────────────
+
+  @Post(':id/images')
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Thêm ảnh vào sản phẩm (variant_id = null)' })
+  addImage(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AddProductImageDto,
+  ): Promise<ProductImage> {
+    return this.productsService.addImage(id, dto);
+  }
+
+  @Delete('images/:imageId')
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Xóa ảnh sản phẩm' })
+  removeImage(
+    @Param('imageId', ParseIntPipe) imageId: number,
+  ): Promise<{ message: string }> {
+    return this.productsService.removeImage(imageId);
+  }
+
+  @Patch('images/:imageId/order')
+  @UseAuth('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cập nhật thứ tự hiển thị ảnh' })
+  updateImageOrder(
+    @Param('imageId', ParseIntPipe) imageId: number,
+    @Body() dto: UpdateImageOrderDto,
+  ): Promise<ProductImage> {
+    return this.productsService.updateImageOrder(imageId, dto);
   }
 }
