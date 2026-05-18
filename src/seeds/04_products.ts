@@ -201,6 +201,28 @@ export async function seed(knex: Knex): Promise<void> {
       }
     }
 
+    // ── 4b. Product-level Images (variant_id = null) ────────────────────────
+
+    for (const p of PRODUCTS_DATA) {
+      const productId = productIdMap.get(p.public_id);
+      if (!productId || !p.images?.length) continue;
+
+      for (const img of p.images) {
+        const imgExists = await trx('product_images')
+          .where({ product_id: productId, variant_id: null, image_url: img.image_url })
+          .first('id');
+        if (!imgExists) {
+          await trx('product_images').insert({
+            product_id: productId,
+            variant_id: null,
+            image_url: img.image_url,
+            alt_text: img.alt_text,
+            display_order: img.display_order,
+          });
+        }
+      }
+    }
+
     // ── 5. Product Variants + Variant Options + Images ──────────────────────
 
     for (const p of PRODUCTS_DATA) {
@@ -248,12 +270,13 @@ export async function seed(knex: Knex): Promise<void> {
             .ignore();
         }
 
-        // Insert ảnh cho variant (check exists trước vì không có unique constraint)
+        // Insert ảnh cho variant (product_id là NOT NULL theo schema mới)
         const imgExists = await trx('product_images')
-          .where({ variant_id: dbVariant.id, image_url: variant.imageUrl })
+          .where({ product_id: productId, variant_id: dbVariant.id, image_url: variant.imageUrl })
           .first('id');
         if (!imgExists) {
           await trx('product_images').insert({
+            product_id: productId,
             variant_id: dbVariant.id,
             image_url: variant.imageUrl,
             alt_text: variant.imageAlt,
@@ -271,7 +294,6 @@ export async function seed(knex: Knex): Promise<void> {
       'MBM3-16-512-SG',
       'S24U-BLACK-256',
     ];
-
 
     // Lấy product_id theo sku
     type VariantWithProductRow = VariantRow & { product_id: number };
@@ -393,7 +415,11 @@ export async function seed(knex: Knex): Promise<void> {
 
     for (const item of orderItemsDef) {
       const oi1Exists = await trx('order_items')
-        .where({ order_id: order1Id, product_id: item.product_id, variant_id: item.variant_id })
+        .where({
+          order_id: order1Id,
+          product_id: item.product_id,
+          variant_id: item.variant_id,
+        })
         .first('id');
       if (!oi1Exists) {
         await trx('order_items').insert({

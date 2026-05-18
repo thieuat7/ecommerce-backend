@@ -6,6 +6,12 @@
  * Logic insert được xử lý trong 04_products.ts.
  */
 
+export type ProductImageSeedItem = {
+  image_url: string;
+  alt_text: string;
+  display_order: number;
+};
+
 export type ProductSeedItem = {
   public_id: string;
   name: string;
@@ -14,6 +20,8 @@ export type ProductSeedItem = {
   price: number;
   is_active: boolean;
   categoryNames: string[]; // Tên category để lookup id
+  /** Ảnh cấp sản phẩm (variant_id = null) */
+  images?: ProductImageSeedItem[];
   variants: VariantSeedItem[];
 };
 
@@ -47,6 +55,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 29990000,
     is_active: true,
     categoryNames: ['Điện thoại di động'],
+    images: [
+      {
+        image_url: 'https://store.storeimages.cdn-apple.com/iphone15promax-main.jpg',
+        alt_text: 'iPhone 15 Pro Max',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'IP15PM-TITAN-256',
@@ -67,7 +82,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: '256 GB',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/iphone15promax-titan.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/iphone15promax-titan.jpg',
         imageAlt: 'iPhone 15 Pro Max Titan Tự Nhiên 256GB',
       },
       {
@@ -89,7 +105,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: '512 GB',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/iphone15promax-blue.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/iphone15promax-blue.jpg',
         imageAlt: 'iPhone 15 Pro Max Titan Xanh 512GB',
       },
     ],
@@ -103,6 +120,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 23990000,
     is_active: true,
     categoryNames: ['Điện thoại di động'],
+    images: [
+      {
+        image_url: 'https://store.storeimages.cdn-apple.com/iphone14pro-main.jpg',
+        alt_text: 'iPhone 14 Pro',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'IP14P-PURPLE-128',
@@ -123,7 +147,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: '128 GB',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/iphone14pro-purple.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/iphone14pro-purple.jpg',
         imageAlt: 'iPhone 14 Pro Tím Đậm 128GB',
       },
       {
@@ -145,7 +170,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: '256 GB',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/iphone14pro-gold.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/iphone14pro-gold.jpg',
         imageAlt: 'iPhone 14 Pro Vàng Gold 256GB',
       },
     ],
@@ -159,6 +185,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 28990000,
     is_active: true,
     categoryNames: ['Điện thoại di động'],
+    images: [
+      {
+        image_url: 'https://image-us.samsung.com/s24ultra-main.jpg',
+        alt_text: 'Samsung Galaxy S24 Ultra',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'S24U-BLACK-256',
@@ -217,6 +250,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 44990000,
     is_active: true,
     categoryNames: ['Máy tính xách tay'],
+    images: [
+      {
+        image_url: 'https://store.storeimages.cdn-apple.com/macbookpro-m3-main.jpg',
+        alt_text: 'MacBook Pro M3',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'MBM3-16-512-SG',
@@ -237,7 +277,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: 'Space Gray',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/macbookpro-m3-sg.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/macbookpro-m3-sg.jpg',
         imageAlt: 'MacBook Pro M3 Space Gray 16GB/512GB',
       },
       {
@@ -259,7 +300,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: 'Silver',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/macbookpro-m3-sl.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/macbookpro-m3-sl.jpg',
         imageAlt: 'MacBook Pro M3 Silver 32GB/1TB',
       },
     ],
@@ -273,6 +315,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 39990000,
     is_active: true,
     categoryNames: ['Máy tính xách tay'],
+    images: [
+      {
+        image_url: 'https://i.dell.com/dell-xps-15-main.jpg',
+        alt_text: 'Dell XPS 15',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'XPS15-I7-16-512',
@@ -319,6 +368,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 15990000,
     is_active: true,
     categoryNames: ['Tablet'],
+    images: [
+      {
+        image_url: 'https://store.storeimages.cdn-apple.com/ipad-air-m1-main.jpg',
+        alt_text: 'iPad Air M1',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'IPAD-AIR-64-WIFI-BL',
@@ -339,7 +395,8 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
             displayValue: 'Xanh Biển',
           },
         ],
-        imageUrl: 'https://store.storeimages.cdn-apple.com/ipad-air-m1-blue.jpg',
+        imageUrl:
+          'https://store.storeimages.cdn-apple.com/ipad-air-m1-blue.jpg',
         imageAlt: 'iPad Air M1 64GB Xanh Biển',
       },
       {
@@ -377,6 +434,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 5990000,
     is_active: true,
     categoryNames: ['Tai nghe', 'Phụ kiện'],
+    images: [
+      {
+        image_url: 'https://store.storeimages.cdn-apple.com/airpods-pro2-main.jpg',
+        alt_text: 'AirPods Pro 2',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'AIRPODS-PRO2-WHITE',
@@ -405,6 +469,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 4190000,
     is_active: true,
     categoryNames: ['Tai nghe', 'Phụ kiện'],
+    images: [
+      {
+        image_url: 'https://image-us.samsung.com/buds2pro-main.jpg',
+        alt_text: 'Samsung Galaxy Buds2 Pro',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'BUDS2PRO-GRAPHITE',
@@ -451,6 +522,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 1250000,
     is_active: true,
     categoryNames: ['Sạc dự phòng', 'Phụ kiện'],
+    images: [
+      {
+        image_url: 'https://cdn.anker.com/powercore-20000-main.jpg',
+        alt_text: 'Anker PowerCore 20000mAh',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'ANKER-20K-BLACK',
@@ -497,6 +575,13 @@ export const PRODUCTS_DATA: ProductSeedItem[] = [
     price: 6490000,
     is_active: true,
     categoryNames: ['Robot hút bụi'],
+    images: [
+      {
+        image_url: 'https://cdn.mi.com/xiaomi-robot-s10-main.jpg',
+        alt_text: 'Xiaomi Robot Vacuum S10',
+        display_order: 0,
+      },
+    ],
     variants: [
       {
         sku: 'XIAOMI-S10-WHITE',
