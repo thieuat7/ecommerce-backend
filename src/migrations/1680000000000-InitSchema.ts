@@ -5,10 +5,19 @@ export const up = async (knex: Knex): Promise<void> => {
   // 1. ENUMS (PostgreSQL)
   // =========================
   await knex.raw(`
+    DROP TYPE IF EXISTS auth_provider_enum CASCADE;
     CREATE TYPE auth_provider_enum AS ENUM ('local', 'google', 'facebook', 'apple');
+    
+    DROP TYPE IF EXISTS order_status_enum CASCADE;
     CREATE TYPE order_status_enum AS ENUM ('pending', 'processing', 'shipped', 'delivered', 'cancelled');
+    
+    DROP TYPE IF EXISTS payment_method_enum CASCADE;
     CREATE TYPE payment_method_enum AS ENUM ('cod', 'credit_card', 'bank_transfer', 'e_wallet', 'momo');
+    
+    DROP TYPE IF EXISTS payment_status_enum CASCADE;
     CREATE TYPE payment_status_enum AS ENUM ('pending', 'completed', 'failed', 'refunded');
+    
+    DROP TYPE IF EXISTS stock_log_action_enum CASCADE;
     CREATE TYPE stock_log_action_enum AS ENUM ('in', 'out', 'adjustment');
   `);
 
@@ -161,11 +170,12 @@ export const up = async (knex: Knex): Promise<void> => {
       table.text('description');
 
       // Giá gốc mặc định, có thể bị ghi đè bởi variant
-      table
-        .decimal('price', 14, 2)
-        .notNullable()
-        .defaultTo(0)
-        .checkBetween([0, 9999999999.99]);
+      table.decimal('price', 14, 2).notNullable().defaultTo(0);
+      table.check(
+        'price >= 0 AND price <= 9999999999.99',
+        [],
+        'products_price_check',
+      );
 
       table.integer('version').notNullable().defaultTo(0);
 
@@ -344,6 +354,11 @@ export const up = async (knex: Knex): Promise<void> => {
       .references('id')
       .inTable('users')
       .onDelete('CASCADE');
+    table
+      .integer('user_address_id')
+      .references('id')
+      .inTable('user_addresses')
+      .onDelete('SET NULL');
 
     table.decimal('total_amount', 14, 2).notNullable();
     table.string('customer_name', 100);
@@ -359,7 +374,7 @@ export const up = async (knex: Knex): Promise<void> => {
   });
 
   // =========================
-  // 16. ORDER ITEMS (chi tiết đơn hàng, có thể chứa variant)
+  // 16. ORDER ITEMS
   // =========================
   await knex.schema.createTable(
     'order_items',
@@ -370,29 +385,46 @@ export const up = async (knex: Knex): Promise<void> => {
         .integer('order_id')
         .references('id')
         .inTable('orders')
+        .notNullable()
         .onDelete('CASCADE');
+
+      // 1. Sử dụng .nullable() để làm rõ intent (code tự làm tài liệu)
       table
         .integer('product_id')
+        .nullable()
         .references('id')
         .inTable('products')
         .onDelete('RESTRICT');
-      // Thêm variant_id, có thể null nếu sản phẩm không có biến thể
       table
         .integer('variant_id')
+        .nullable()
         .references('id')
         .inTable('product_variants')
         .onDelete('RESTRICT');
 
+      // 3. Cập nhật Constraint chặn số lượng âm hoặc bằng 0
       table.integer('quantity').notNullable();
-      table.decimal('price_at_purchase', 14, 2).notNullable(); // Giá tại thời điểm mua
+      table.check('quantity > 0', [], 'order_items_quantity_check');
+
+      table.decimal('price_at_purchase', 14, 2).notNullable();
+
+      table.string('product_name', 255).notNullable();
+      table.string('variant_name', 255).nullable();
+      table.string('sku', 100).nullable();
+
+      // Ràng buộc Check: Chỉ có product_id HOẶC variant_id
+      table.check(
+        '((product_id IS NOT NULL AND variant_id IS NULL) OR (product_id IS NULL AND variant_id IS NOT NULL))',
+        [],
+        'order_items_product_or_variant_check',
+      );
+
+      table.unique(['order_id', 'product_id', 'variant_id']);
 
       table.timestamps(true, true);
 
-      // Ràng buộc: nếu có variant_id thì product_id phải trùng với product_id của variant đó
-      // Có thể dùng trigger hoặc kiểm tra ở ứng dụng, ở đây chỉ tạo index
-      table.index('order_id');
-      table.index('product_id');
-      table.index('variant_id');
+      table.index(['order_id', 'product_id']);
+      table.index(['order_id', 'variant_id']);
     },
   );
 
@@ -441,7 +473,7 @@ export const up = async (knex: Knex): Promise<void> => {
       .references('id')
       .inTable('users')
       .onDelete('CASCADE')
-      .unique(); // Mỗi user chỉ có một giỏ hàng
+      .unique();
     table.timestamps(true, true);
   });
 
@@ -464,6 +496,7 @@ export const up = async (knex: Knex): Promise<void> => {
         .onDelete('RESTRICT');
       table
         .integer('variant_id')
+        .nullable()
         .references('id')
         .inTable('product_variants')
         .onDelete('RESTRICT');

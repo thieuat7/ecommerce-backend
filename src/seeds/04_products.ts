@@ -10,6 +10,7 @@ type UserRow = IdRow & { email: string };
 type AttributeRow = IdRow & { name: string };
 type AttributeValueRow = IdRow & { attribute_id: number; value: string };
 type ProductRow = IdRow & { public_id: string };
+type ProductLookupRow = ProductRow & { name: string };
 type VariantRow = IdRow & { sku: string };
 type UserAddressRow = IdRow & {
   recipient_name: string;
@@ -68,10 +69,10 @@ export async function seed(knex: Knex): Promise<void> {
       'user: customer',
     );
 
-    const customerAddress = (await trx<UserAddressRow>('user_addresses')
+    const customerAddress = await trx<UserAddressRow>('user_addresses')
       .where({ user_id: customerUser.id })
       .whereNull('deleted_at')
-      .first([
+      .select([
         'id',
         'recipient_name',
         'phone_number',
@@ -79,7 +80,8 @@ export async function seed(knex: Knex): Promise<void> {
         'ward',
         'district',
         'province',
-      ])) as UserAddressRow | undefined;
+      ])
+      .first();
     const safeAddress = assertRow(customerAddress, 'user_addresses (customer)');
 
     // ── 2. Upsert Attributes & Attribute Values ─────────────────────────────
@@ -120,9 +122,9 @@ export async function seed(knex: Knex): Promise<void> {
         .merge(['display_name']);
     }
 
-    const dbAttributes = await trx<AttributeRow>('attributes')
+    const dbAttributes = (await trx<AttributeRow>('attributes')
       .whereIn('name', [...attrDefsMap.keys()])
-      .select(['id', 'name']);
+      .select(['id', 'name'])) as AttributeRow[];
 
     const attrIdMap = new Map<string, number>(
       dbAttributes.map((a) => [a.name, a.id]),
@@ -172,9 +174,9 @@ export async function seed(knex: Knex): Promise<void> {
     }
 
     const productPublicIds = PRODUCTS_DATA.map((p) => p.public_id);
-    const dbProducts = await trx<ProductRow>('products')
+    const dbProducts = (await trx<ProductLookupRow>('products')
       .whereIn('public_id', productPublicIds)
-      .select(['id', 'public_id']);
+      .select(['id', 'public_id', 'name'])) as ProductLookupRow[];
 
     const productIdMap = new Map<string, number>(
       dbProducts.map((p) => [p.public_id, p.id]),
@@ -208,9 +210,14 @@ export async function seed(knex: Knex): Promise<void> {
       if (!productId || !p.images?.length) continue;
 
       for (const img of p.images) {
-        const imgExists = await trx('product_images')
-          .where({ product_id: productId, variant_id: null, image_url: img.image_url })
-          .first('id');
+        const imgExists = (await trx('product_images')
+          .where({
+            product_id: productId,
+            variant_id: null,
+            image_url: img.image_url,
+          })
+          .select(['id'])
+          .first()) as IdRow | undefined;
         if (!imgExists) {
           await trx('product_images').insert({
             product_id: productId,
@@ -251,9 +258,10 @@ export async function seed(knex: Knex): Promise<void> {
           .onConflict('sku')
           .merge(['price', 'stock_quantity', 'is_active', 'option_hash']);
 
-        const dbVariant = (await trx<VariantRow>('product_variants')
+        const dbVariant = await trx<VariantRow>('product_variants')
           .where({ sku: variant.sku })
-          .first(['id', 'sku'])) as VariantRow | undefined;
+          .select(['id', 'sku'])
+          .first();
 
         if (!dbVariant) continue;
 
@@ -271,9 +279,14 @@ export async function seed(knex: Knex): Promise<void> {
         }
 
         // Insert ảnh cho variant (product_id là NOT NULL theo schema mới)
-        const imgExists = await trx('product_images')
-          .where({ product_id: productId, variant_id: dbVariant.id, image_url: variant.imageUrl })
-          .first('id');
+        const imgExists = await trx<{ id: number }>('product_images')
+          .where({
+            product_id: productId,
+            variant_id: dbVariant.id,
+            image_url: variant.imageUrl,
+          })
+          .select(['id'])
+          .first();
         if (!imgExists) {
           await trx('product_images').insert({
             product_id: productId,
@@ -304,9 +317,10 @@ export async function seed(knex: Knex): Promise<void> {
       .select(['id', 'sku', 'product_id']);
 
     for (const v of stockVariantsWithProduct) {
-      const exists = await trx('stock_logs')
+      const exists = await trx<{ id: number }>('stock_logs')
         .where({ variant_id: v.id, action: 'in' })
-        .first('id');
+        .select(['id'])
+        .first();
       if (!exists) {
         const variantData = PRODUCTS_DATA.flatMap((p) => p.variants).find(
           (vd) => vd.sku === v.sku,
@@ -335,41 +349,52 @@ export async function seed(knex: Knex): Promise<void> {
     // Lấy variant iPhone 15 để tạo order item
     const ip15TitanVariant = (await trx<VariantRow>('product_variants')
       .where({ sku: 'IP15PM-TITAN-256' })
-      .first(['id', 'sku'])) as VariantRow | undefined;
+      .select(['id', 'sku'])
+      .first()) as VariantRow | undefined;
 
     const ip15Product = dbProducts.find((p) => p.public_id === 'prod_iphone15');
 
     const macbookVariant = (await trx<VariantRow>('product_variants')
       .where({ sku: 'MBM3-16-512-SG' })
-      .first(['id', 'sku'])) as VariantRow | undefined;
+      .select(['id', 'sku'])
+      .first()) as VariantRow | undefined;
 
     const macbookProduct = dbProducts.find(
       (p) => p.public_id === 'prod_macbook_m3',
     );
 
     type OrderItemDef = {
-      product_id: number;
+      product_id: number | null;
       variant_id: number | null;
       quantity: number;
       price_at_purchase: number;
+      product_name: string;
+      variant_name: string | null;
+      sku: string | null;
     };
 
     const orderItemsDef: OrderItemDef[] = [];
 
     if (ip15TitanVariant && ip15Product) {
       orderItemsDef.push({
-        product_id: ip15Product.id,
+        product_id: null, // CẬP NHẬT: Phải để null vì đã có variant_id
         variant_id: ip15TitanVariant.id,
         quantity: 1,
         price_at_purchase: 29990000,
+        product_name: ip15Product.name, // CẬP NHẬT: Lưu snapshot name
+        variant_name: 'Titan 256GB',
+        sku: ip15TitanVariant.sku,
       });
     }
     if (macbookVariant && macbookProduct) {
       orderItemsDef.push({
-        product_id: macbookProduct.id,
+        product_id: null, // CẬP NHẬT: Phải để null vì đã có variant_id
         variant_id: macbookVariant.id,
         quantity: 1,
         price_at_purchase: 44990000,
+        product_name: macbookProduct.name, // CẬP NHẬT: Lưu snapshot name
+        variant_name: '16GB RAM 512GB Space Gray',
+        sku: macbookVariant.sku,
       });
     }
 
@@ -391,15 +416,17 @@ export async function seed(knex: Knex): Promise<void> {
     const order1Code = 'ORD-2026-0001';
     let order1Id: number;
 
-    const existingOrder1 = (await trx('orders')
+    const existingOrder1 = await trx<IdRow>('orders')
       .where({ order_code: order1Code })
-      .first('id')) as IdRow | undefined;
+      .select(['id'])
+      .first();
 
     if (!existingOrder1) {
       const [o1] = (await trx('orders')
         .insert({
           order_code: order1Code,
           user_id: customerUser.id,
+          user_address_id: safeAddress.id,
           total_amount: totalAmount,
           customer_name: safeAddress.recipient_name,
           customer_phone: safeAddress.phone_number,
@@ -414,13 +441,19 @@ export async function seed(knex: Knex): Promise<void> {
     }
 
     for (const item of orderItemsDef) {
-      const oi1Exists = await trx('order_items')
-        .where({
-          order_id: order1Id,
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-        })
-        .first('id');
+      // Vì unique constraint hiện tại là ['order_id', 'product_id', 'variant_id']
+      // nên phải kiểm tra chính xác cả NULL
+      const oi1Query = trx('order_items').where({ order_id: order1Id });
+      if (item.product_id) oi1Query.where('product_id', item.product_id);
+      else oi1Query.whereNull('product_id');
+
+      if (item.variant_id) oi1Query.where('variant_id', item.variant_id);
+      else oi1Query.whereNull('variant_id');
+
+      const oi1Exists = (await oi1Query.select(['id']).first()) as
+        | IdRow
+        | undefined;
+
       if (!oi1Exists) {
         await trx('order_items').insert({
           order_id: order1Id,
@@ -428,6 +461,9 @@ export async function seed(knex: Knex): Promise<void> {
           variant_id: item.variant_id,
           quantity: item.quantity,
           price_at_purchase: item.price_at_purchase,
+          product_name: item.product_name, // CẬP NHẬT
+          variant_name: item.variant_name, // CẬP NHẬT
+          sku: item.sku, // CẬP NHẬT
         });
       }
     }
@@ -436,15 +472,17 @@ export async function seed(knex: Knex): Promise<void> {
     const order2Code = 'ORD-2026-0002';
     let order2Id: number;
 
-    const existingOrder2 = (await trx('orders')
+    const existingOrder2 = await trx<IdRow>('orders')
       .where({ order_code: order2Code })
-      .first('id')) as IdRow | undefined;
+      .select(['id'])
+      .first();
 
     if (ip15Product && !existingOrder2) {
       const [o2] = (await trx('orders')
         .insert({
           order_code: order2Code,
           user_id: customerUser.id,
+          user_address_id: safeAddress.id,
           total_amount: 29990000,
           customer_name: safeAddress.recipient_name,
           customer_phone: safeAddress.phone_number,
@@ -457,10 +495,13 @@ export async function seed(knex: Knex): Promise<void> {
 
       await trx('order_items').insert({
         order_id: order2Id,
-        product_id: ip15Product.id,
+        product_id: null, // CẬP NHẬT: Chỉ lưu variant_id
         variant_id: ip15TitanVariant?.id ?? null,
         quantity: 1,
         price_at_purchase: 29990000,
+        product_name: ip15Product.name, // CẬP NHẬT
+        variant_name: 'Titan 256GB', // CẬP NHẬT
+        sku: ip15TitanVariant?.sku ?? null, // CẬP NHẬT
       });
     } else if (existingOrder2) {
       order2Id = existingOrder2.id;
@@ -512,6 +553,7 @@ export async function seed(knex: Knex): Promise<void> {
 
     const cart = (await trx('carts')
       .where({ user_id: customerUser.id })
+      .select(['id'])
       .first()) as IdRow | undefined;
 
     if (cart && macbookProduct && macbookVariant) {

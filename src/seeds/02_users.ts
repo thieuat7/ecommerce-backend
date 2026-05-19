@@ -45,7 +45,13 @@ export async function seed(knex: Knex): Promise<void> {
         },
       ])
       .onConflict('email')
-      .merge(['public_id', 'full_name', 'password', 'phone_number', 'is_active']);
+      .merge([
+        'public_id',
+        'full_name',
+        'password',
+        'phone_number',
+        'is_active',
+      ]);
 
     const roles = await trx<RoleRow>('roles')
       .whereIn('name', ['admin', 'user'])

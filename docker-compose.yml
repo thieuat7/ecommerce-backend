@@ -53,45 +53,45 @@ services:
   # =========================
   # 3. BACKEND NESTJS
   # =========================
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: builder
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: builder
 
-    container_name: ecommerce_backend
+  #   container_name: ecommerce_backend
 
-    env_file:
-      - .env
+  #   env_file:
+  #     - .env
 
-    ports:
-      - "3000:3000"
+  #   ports:
+  #     - "3000:3000"
 
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+  #   depends_on:
+  #     postgres-db:
+  #       condition: service_healthy
+  #     migrate:
+  #       condition: service_completed_successfully
 
-    command: npm run start:dev
+  #   command: npm run start:dev
 
-    volumes:
-      # - .:/app
-      - /app/node_modules
+  #   volumes:
+  #     # - .:/app
+  #     - /app/node_modules
 
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /app
-          ignore:
-            - node_modules/
-            - dist/
+  #   develop:
+  #     watch:
+  #       - action: sync
+  #         path: .
+  #         target: /app
+  #         ignore:
+  #           - node_modules/
+  #           - dist/
 
-        - action: rebuild
-          path: package.json
+  #       - action: rebuild
+  #         path: package.json
 
-    restart: unless-stopped
+  #   restart: unless-stopped
 
 # =========================
 # VOLUMES

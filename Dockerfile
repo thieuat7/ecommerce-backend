@@ -13,7 +13,7 @@ RUN npm install
 COPY . .
 
 # Build dự án NestJS
-RUN npm run build
+# RUN npm run build
 
 # ---- Stage 2: Production ----
 FROM node:18-alpine
