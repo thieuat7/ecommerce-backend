@@ -1,34 +1,57 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+// stock-log.controller.ts
+import { Controller, Get, Param, Query, ParseIntPipe } from '@nestjs/common';
 import { StockLogsService } from './stock-logs.service';
-import { CreateStockLogDto } from './dto/create-stock-log.dto';
-import { UpdateStockLogDto } from './dto/update-stock-log.dto';
+import { StockLog } from './entities/stock-log.entity';
+import { StockLogAction } from './enums/stock-log-action.enum';
+import { UseAuth } from '@common/decorators/use-auth.decorator';
+import { FilterStockLogDto } from './dto/filter-stock-log.dto';
 
 @Controller('stock-logs')
-export class StockLogsController {
-  constructor(private readonly stockLogsService: StockLogsService) {}
+// @UseGuards(AuthGuard('jwt'), RolesGuard) // Bật nếu cần xác thực
+export class StockLogController {
+  constructor(private readonly stockLogService: StockLogsService) {}
 
-  @Post()
-  create(@Body() createStockLogDto: CreateStockLogDto) {
-    return this.stockLogsService.create(createStockLogDto);
-  }
-
+  /**
+   * Lấy danh sách logs có phân trang và lọc
+   */
   @Get()
-  findAll() {
-    return this.stockLogsService.findAll();
+  @UseAuth('ADMIN')
+  // @Roles(UserRole.ADMIN, UserRole.MANAGER) // Ví dụ phân quyền
+  async findAll(@Query() filter: FilterStockLogDto) {
+    return this.stockLogService.findAll(filter);
   }
 
+  /**
+   * Lấy chi tiết một log theo ID
+   */
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.stockLogsService.findOne(+id);
+  @UseAuth('ADMIN')
+  // @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.stockLogService.findOne(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateStockLogDto: UpdateStockLogDto) {
-    return this.stockLogsService.update(+id, updateStockLogDto);
+  /**
+   * Lấy logs theo sản phẩm (tiện ích, có thể gọi qua filter thông thường)
+   */
+  @Get('product/:productId')
+  @UseAuth('ADMIN')
+  async findByProduct(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Query() filter: FilterStockLogDto,
+  ) {
+    return this.stockLogService.findAll({ ...filter, productId });
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.stockLogsService.remove(+id);
+  /**
+   * Lấy logs theo biến thể
+   */
+  @Get('variant/:variantId')
+  @UseAuth('ADMIN')
+  async findByVariant(
+    @Param('variantId', ParseIntPipe) variantId: number,
+    @Query() filter: FilterStockLogDto,
+  ) {
+    return this.stockLogService.findAll({ ...filter, variantId });
   }
 }
