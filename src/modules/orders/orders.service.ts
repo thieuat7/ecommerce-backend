@@ -13,7 +13,8 @@ import { OrderItem } from '@modules/order-items/entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderStatus } from './enums/order-status.enum';
-import { Product } from '../products/entities/product.entity';
+
+import { ProductVariant } from '@modules/variant/entities/product_variant.entity';
 
 const MAX_RETRY = 3;
 
@@ -34,7 +35,7 @@ export class OrdersService {
     const { userId, items, shippingAddress, status, orderCode } =
       createOrderDto;
 
-    // 1. Loại bỏ trùng lặp productId gửi lên từ client
+    // 1. Loại bỏ trùng lặp variantId gửi lên từ client
     const mergedItems = this.mergeItems(items);
     let attempt = 0;
 
@@ -45,38 +46,54 @@ export class OrdersService {
           let totalAmount = 0;
           const orderItemsData: any[] = [];
 
-          // ── Bước 1: Lock & validate từng sản phẩm ──────────────────────────
+          // ── Bước 1: Lock & validate từng biến thể (Variant) ───────────────
           for (const item of mergedItems) {
-            const product = await manager.findOne(Product, {
-              where: { id: item.productId },
+            // Tìm Variant và Join kèm với Product gốc để lấy giá dự phòng
+            const variant = await manager.findOne(ProductVariant, {
+              where: { id: item.variantId },
+              relations: ['product'], // Cần join product để lấy giá gốc nếu variant price là null
               lock: { mode: 'pessimistic_write' },
             });
 
-            if (!product) {
+            if (!variant) {
               throw new NotFoundException(
-                `Không tìm thấy sản phẩm id=${item.productId}`,
+                `Không tìm thấy biến thể sản phẩm id=${item.variantId}`,
               );
             }
 
-            // Kiểm tra tồn kho (Sử dụng stockQuantity từ SQL products)
-            if (product.stockQuantity < item.quantity) {
+            const product = variant.product;
+
+            if (!product.isActive || !variant.isActive) {
               throw new BadRequestException(
-                `Sản phẩm "${product.name}" không đủ tồn kho. Còn lại: ${product.stockQuantity}`,
+                `Sản phẩm hoặc biến thể "${product.name}" hiện không hoạt động.`,
               );
             }
 
-            // ── Bước 2: Cập nhật tồn kho ──────────────────────────────────────
-            product.stockQuantity -= item.quantity;
-            await manager.save(Product, product);
+            // Kiểm tra tồn kho (Bây giờ lấy từ variant.stockQuantity)
+            if (variant.stockQuantity < item.quantity) {
+              throw new BadRequestException(
+                `Biến thể của "${product.name}" không đủ tồn kho. Còn lại: ${variant.stockQuantity}`,
+              );
+            }
 
-            // ── Bước 3: Tính toán giá và chuẩn bị dữ liệu item ────────────────
-            const itemTotal = Number(product.price) * item.quantity;
+            // ── Bước 2: Cập nhật tồn kho vào Variant ──────────────────────────
+            variant.stockQuantity -= item.quantity;
+            await manager.save(ProductVariant, variant);
+
+            // ── Bước 3: Tính toán giá (Ưu tiên variant.price, nếu NULL thì lấy product.price)
+            const finalPrice =
+              variant.price !== null && variant.price !== undefined
+                ? Number(variant.price)
+                : Number(product.price);
+
+            const itemTotal = finalPrice * item.quantity;
             totalAmount += itemTotal;
 
             orderItemsData.push({
-              product: product, // Gán object product vào quan hệ
+              product: product,
+              variant: variant, // Lưu trữ thêm variant vào OrderItem
               quantity: item.quantity,
-              priceAtPurchase: Number(product.price),
+              priceAtPurchase: finalPrice,
             });
           }
 
@@ -107,7 +124,11 @@ export class OrdersService {
           // Trả về order đầy đủ thông tin
           const result = await manager.findOne(Order, {
             where: { id: savedOrder.id },
-            relations: ['orderItems', 'orderItems.product'], // Khớp với camelCase trong Entity
+            relations: [
+              'orderItems',
+              'orderItems.product',
+              'orderItems.variant',
+            ],
           });
 
           if (!result) throw new Error('Failed to retrieve saved order');
@@ -121,7 +142,7 @@ export class OrdersService {
         ) {
           this.logger.warn(`[RETRY] Xung đột lần ${attempt}/${MAX_RETRY}...`);
           if (attempt >= MAX_RETRY)
-            throw new ConflictException('Hệ thống bận.');
+            throw new ConflictException('Hệ thống bận, vui lòng thử lại sau.');
           await this.sleep(100);
           continue;
         }
@@ -142,16 +163,17 @@ export class OrdersService {
     throw new BadRequestException('Quá số lần thử lại.');
   }
 
-  // ─── Helper: gộp trùng productId ──────────────────────────────────────────
+  // ─── Helper: gộp trùng variantId ──────────────────────────────────────────
+  // LƯU Ý: Đã đổi từ productId sang variantId vì khách mua biến thể cụ thể
   private mergeItems(
-    items: { productId: number; quantity: number }[],
-  ): { productId: number; quantity: number }[] {
+    items: { variantId: number; quantity: number }[],
+  ): { variantId: number; quantity: number }[] {
     const map = new Map<number, number>();
     for (const item of items) {
-      map.set(item.productId, (map.get(item.productId) ?? 0) + item.quantity);
+      map.set(item.variantId, (map.get(item.variantId) ?? 0) + item.quantity);
     }
-    return Array.from(map.entries()).map(([productId, quantity]) => ({
-      productId,
+    return Array.from(map.entries()).map(([variantId, quantity]) => ({
+      variantId,
       quantity,
     }));
   }
@@ -163,8 +185,8 @@ export class OrdersService {
   // ─── Các phương thức truy vấn ──────────────────────────────────────────────
   async findAllByUserId(userId: number): Promise<Order[]> {
     return await this.ordersRepository.find({
-      where: { user: { id: userId } }, // Truy vấn theo quan hệ user
-      relations: ['orderItems', 'orderItems.product'],
+      where: { user: { id: userId } },
+      relations: ['orderItems', 'orderItems.product', 'orderItems.variant'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -172,7 +194,7 @@ export class OrdersService {
   async findOneByIdAndUserId(id: number, userId: number): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id, user: { id: userId } },
-      relations: ['orderItems', 'orderItems.product'],
+      relations: ['orderItems', 'orderItems.product', 'orderItems.variant'],
     });
     if (!order) throw new NotFoundException('Đơn hàng không tồn tại.');
     return order;

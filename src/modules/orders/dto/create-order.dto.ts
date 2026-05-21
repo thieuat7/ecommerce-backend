@@ -10,13 +10,15 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderStatus } from '../enums/order-status.enum';
+
 /**
  * DTO cho từng món hàng trong đơn hàng
  */
 export class CreateOrderItemDto {
+  // Đã cập nhật: Sử dụng variantId thay vì productId
   @IsInt()
-  @IsPositive({ message: 'ID sản phẩm phải là số dương' })
-  productId: number;
+  @IsPositive({ message: 'ID biến thể sản phẩm phải là số dương' })
+  variantId: number;
 
   @IsInt()
   @IsPositive({ message: 'Số lượng phải lớn hơn 0' })
@@ -38,7 +40,7 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsEnum(OrderStatus, { message: 'Trạng thái đơn hàng không hợp lệ' })
-  status?: OrderStatus; // Sử dụng Enum ở đây
+  status?: OrderStatus;
 
   @IsOptional()
   @IsString()
