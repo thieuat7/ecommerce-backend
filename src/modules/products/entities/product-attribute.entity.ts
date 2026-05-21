@@ -19,7 +19,7 @@ export class ProductAttribute {
   @Column({ type: 'int', name: 'product_id' })
   productId: number;
 
-  @ManyToOne(() => Product, (product) => product.attributes, {
+  @ManyToOne(() => Product, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'product_id' })

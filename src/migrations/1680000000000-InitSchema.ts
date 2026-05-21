@@ -310,20 +310,21 @@ export const up = async (knex: Knex): Promise<void> => {
     'stock_logs',
     (table: Knex.TableBuilder): void => {
       table.increments('id').primary();
-      // Có thể log cho product tổng hoặc variant cụ thể
       table
         .integer('product_id')
         .references('id')
         .inTable('products')
         .notNullable()
-        .onDelete('CASCADE');
+        .onDelete('RESTRICT');
       table
         .integer('variant_id')
         .references('id')
         .inTable('product_variants')
-        .onDelete('CASCADE');
+        .nullable()
+        .onDelete('SET NULL');
       table
         .integer('changed_by_user_id')
+        .nullable()
         .references('id')
         .inTable('users')
         .onDelete('SET NULL');
@@ -336,8 +337,17 @@ export const up = async (knex: Knex): Promise<void> => {
       table.text('reason');
       table.timestamps(true, true);
 
-      table.index('product_id');
-      table.index('variant_id');
+      table.check('?? = ?? + ??', [
+        'after_quantity',
+        'before_quantity',
+        'quantity_change',
+      ]);
+      table.check('?? <> 0', ['quantity_change']);
+      table.check('after_quantity >= 0');
+      table.check('before_quantity >= 0');
+
+      table.index(['product_id', 'created_at']);
+      table.index(['variant_id', 'created_at']);
       table.index('changed_by_user_id');
     },
   );

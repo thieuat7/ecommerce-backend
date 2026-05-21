@@ -58,7 +58,7 @@ export class VariantController {
   create(
     @Param('productId', ParseIntPipe) productId: number,
     @Body() dto: CreateVariantDto,
-    @GetCurrentUser('sub') userId?: number,
+    @GetCurrentUser('userId') userId?: number,
   ) {
     return this.variantService.create(productId, dto, userId);
   }
@@ -74,7 +74,7 @@ export class VariantController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateVariantDto,
-    @GetCurrentUser('sub') userId?: number,
+    @GetCurrentUser('userId') userId?: number,
   ) {
     return this.variantService.update(id, dto, userId);
   }

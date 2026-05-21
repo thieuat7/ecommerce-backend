@@ -1,8 +1,6 @@
 // stock-log.controller.ts
 import { Controller, Get, Param, Query, ParseIntPipe } from '@nestjs/common';
 import { StockLogsService } from './stock-logs.service';
-import { StockLog } from './entities/stock-log.entity';
-import { StockLogAction } from './enums/stock-log-action.enum';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 import { FilterStockLogDto } from './dto/filter-stock-log.dto';
 

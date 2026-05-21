@@ -9,9 +9,10 @@ import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from '@modules/users/users.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { ProductsModule } from '@modules/products/products.module';
-import { OrdersModule } from '@modules/orders/orders.module';
 import { CategoriesModule } from '@modules/categories/categories.module';
-import { PaymentsModule } from '@modules/payments/payments.module';
+import { AttributeModule } from '@modules/attribute/attribute.module';
+import { VariantModule } from '@modules/variant/variant.module';
+import { StockLogsModule } from '@modules/stock-logs/stock-logs.module';
 
 import databaseConfig from '@database/database.config';
 import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
@@ -27,10 +28,11 @@ import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
     DatabaseModule,
     UsersModule,
     AuthModule,
-    //ProductsModule,
-    // OrdersModule,
-    //CategoriesModule,
-    // PaymentsModule,
+    CategoriesModule,
+    AttributeModule,
+    ProductsModule,
+    VariantModule,
+    StockLogsModule,
   ],
   controllers: [AppController],
   providers: [

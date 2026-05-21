@@ -4,14 +4,17 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/product-image.entity';
 import { Category } from '@modules/categories/entities/category.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
-import { AddProductImageDto, UpdateImageOrderDto } from './dto/product-image.dto';
+import {
+  AddProductImageDto,
+  UpdateImageOrderDto,
+} from './dto/product-image.dto';
 import { v4 as uuidv4 } from 'uuid';
 import slugify from 'slugify';
 
@@ -32,13 +35,18 @@ export class ProductsService {
     private readonly imageRepo: Repository<ProductImage>,
     @InjectRepository(Category)
     private readonly categoryRepo: Repository<Category>,
-    private readonly dataSource: DataSource,
   ) {}
 
   // ─── HELPER: Sinh slug unique ─────────────────────────────────────────────
 
-  private async generateUniqueSlug(name: string, excludeId?: number): Promise<string> {
-    const base = slugify(name, { lower: true, strict: true, locale: 'vi' });
+  private async generateUniqueSlug(
+    name: string,
+    excludeId?: number,
+  ): Promise<string> {
+    // FIX: Sử dụng String() để ép kiểu kết quả của slugify một cách an toàn
+    const base = String(
+      slugify(name, { lower: true, strict: true, locale: 'vi' }),
+    );
     let slug = base;
     let suffix = 1;
 
@@ -47,12 +55,16 @@ export class ProductsService {
         .createQueryBuilder('p')
         .where('p.slug = :slug', { slug })
         .withDeleted();
+
       if (excludeId) {
         qb.andWhere('p.id != :id', { id: excludeId });
       }
+
       const exists = await qb.getOne();
       if (!exists) break;
-      slug = `${base}-${suffix++}`;
+
+      // FIX: Ép kiểu string khi cộng chuỗi
+      slug = String(`${base}-${suffix++}`);
     }
 
     return slug;
@@ -116,7 +128,9 @@ export class ProductsService {
     }
 
     const sortField = `product.${sortBy}`;
-    qb.orderBy(sortField, sortOrder).skip((page - 1) * limit).take(limit);
+    qb.orderBy(sortField, sortOrder)
+      .skip((page - 1) * limit)
+      .take(limit);
 
     const [data, total] = await qb.getManyAndCount();
 
@@ -159,6 +173,7 @@ export class ProductsService {
       where: { id },
       withDeleted: false,
     });
+
     if (!product) {
       throw new NotFoundException(`Không tìm thấy sản phẩm id=${id}`);
     }
@@ -169,7 +184,11 @@ export class ProductsService {
       );
     }
 
-    const { version: _v, name, ...rest } = dto;
+    // Tách 'version' và 'name' ra khỏi đối tượng dto.
+    // Các phần còn lại sẽ nằm trong biến 'rest'.
+    // Dòng comment bên dưới giúp ESLint không báo lỗi biến 'version' chưa được sử dụng.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { version, name, ...rest } = dto;
 
     // Sinh slug mới nếu tên thay đổi
     if (name && name !== product.name) {
@@ -177,6 +196,7 @@ export class ProductsService {
       product.name = name;
     }
 
+    // Lúc này 'rest' đã không còn chứa 'version' và 'name', rất an toàn để gán
     Object.assign(product, rest);
     product.version = product.version + 1;
 
@@ -240,8 +260,13 @@ export class ProductsService {
 
   // ─── QUẢN LÝ ẢNH (cấp product) ───────────────────────────────────────────
 
-  async addImage(productId: number, dto: AddProductImageDto): Promise<ProductImage> {
-    const product = await this.productRepo.findOne({ where: { id: productId } });
+  async addImage(
+    productId: number,
+    dto: AddProductImageDto,
+  ): Promise<ProductImage> {
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+    });
     if (!product) {
       throw new NotFoundException(`Không tìm thấy sản phẩm id=${productId}`);
     }
