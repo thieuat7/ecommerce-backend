@@ -26,8 +26,8 @@ export const DecimalTransformer: ValueTransformer = {
 };
 
 @Entity('product_variants')
-@Unique(['product_id', 'option_hash'])
-@Index('product_id')
+@Unique(['productId', 'optionHash'])
+@Index('productId')
 export class ProductVariant {
   @PrimaryGeneratedColumn()
   id: number;

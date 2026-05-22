@@ -30,14 +30,18 @@ export class VariantController {
 
   @Get('products/:productId/variants')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Danh sách variants của sản phẩm (kèm options & images)' })
+  @ApiOperation({
+    summary: 'Danh sách variants của sản phẩm (kèm options & images)',
+  })
   findByProduct(@Param('productId', ParseIntPipe) productId: number) {
     return this.variantService.findByProduct(productId);
   }
 
   @Get('variants/:id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Chi tiết variant (kèm options, images, 10 stock logs gần nhất)' })
+  @ApiOperation({
+    summary: 'Chi tiết variant (kèm options, images, 10 stock logs gần nhất)',
+  })
   @ApiResponse({ status: 404, description: 'Variant không tồn tại' })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.variantService.findOne(id);
@@ -52,9 +56,13 @@ export class VariantController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Tạo variant mới cho sản phẩm (Admin only)',
-    description: 'Tự động tính option_hash, sinh SKU nếu trống, ghi stock_log nếu stockQuantity > 0',
+    description:
+      'Tự động tính option_hash, sinh SKU nếu trống, ghi stock_log nếu stockQuantity > 0',
   })
-  @ApiResponse({ status: 409, description: 'Tổ hợp attributes hoặc SKU đã tồn tại' })
+  @ApiResponse({
+    status: 409,
+    description: 'Tổ hợp attributes hoặc SKU đã tồn tại',
+  })
   create(
     @Param('productId', ParseIntPipe) productId: number,
     @Body() dto: CreateVariantDto,
@@ -70,7 +78,10 @@ export class VariantController {
     summary: 'Cập nhật variant (Admin only) – Cần gửi version hiện tại',
     description: 'Thay đổi stock_quantity sẽ tự động ghi stock_log',
   })
-  @ApiResponse({ status: 409, description: 'Xung đột phiên bản (optimistic lock)' })
+  @ApiResponse({
+    status: 409,
+    description: 'Xung đột phiên bản (optimistic lock)',
+  })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateVariantDto,

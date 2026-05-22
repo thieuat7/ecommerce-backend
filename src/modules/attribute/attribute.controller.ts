@@ -11,14 +11,13 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AttributeService } from './attribute.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
 import { UpdateAttributeDto } from './dto/update-attribute.dto';
 import { CreateAttributeValueDto } from './dto/create-attribute-value.dto';
 import { UpdateAttributeValueDto } from './dto/update-attribute-value.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
-import { Transform } from 'class-transformer';
 
 @ApiTags('Attributes')
 @Controller()
@@ -38,9 +37,7 @@ export class AttributeController {
     type: Boolean,
     description: 'Kèm theo attribute values hay không',
   })
-  findAll(
-    @Query('includeValues') includeValues?: string,
-  ) {
+  findAll(@Query('includeValues') includeValues?: string) {
     return this.attributeService.findAll(includeValues === 'true');
   }
 

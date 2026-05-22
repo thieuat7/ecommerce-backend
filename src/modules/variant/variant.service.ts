@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { createHash } from 'crypto';
 import { ProductVariant } from './entities/product_variant.entity';
 import { ProductVariantOption } from './entities/product-variant-option.entity';
@@ -38,7 +38,10 @@ export class VariantService {
 
   private buildOptionHash(attributeValueIds: number[]): string {
     const sorted = [...attributeValueIds].sort((a, b) => a - b);
-    return createHash('md5').update(sorted.join('-')).digest('hex').slice(0, 16);
+    return createHash('md5')
+      .update(sorted.join('-'))
+      .digest('hex')
+      .slice(0, 16);
   }
 
   // ─── HELPER: Sinh SKU tự động ─────────────────────────────────────────────
@@ -67,8 +70,9 @@ export class VariantService {
       quantityChange: Math.abs(quantityChange),
       beforeQuantity,
       afterQuantity,
-      reason: reason ?? null,
-      changedByUserId: changedByUserId ?? null,
+      // Thay đổi ?? null thành ?? undefined để giải quyết lỗi TypeScript TypeORM
+      reason: reason ?? undefined,
+      changedByUserId: changedByUserId ?? undefined,
     });
     await this.stockLogRepo.save(log);
   }
@@ -128,7 +132,9 @@ export class VariantService {
     currentUserId?: number,
   ): Promise<ProductVariant> {
     // 1. Validate product
-    const product = await this.productRepo.findOne({ where: { id: productId } });
+    const product = await this.productRepo.findOne({
+      where: { id: productId },
+    });
     if (!product) {
       throw new NotFoundException(`Không tìm thấy sản phẩm id=${productId}`);
     }
@@ -139,7 +145,9 @@ export class VariantService {
     });
     if (attrValues.length !== dto.attributeValueIds.length) {
       const foundIds = attrValues.map((av) => av.id);
-      const missing = dto.attributeValueIds.filter((id) => !foundIds.includes(id));
+      const missing = dto.attributeValueIds.filter(
+        (id) => !foundIds.includes(id),
+      );
       throw new NotFoundException(
         `Không tìm thấy attribute_value_id: [${missing.join(', ')}]`,
       );
@@ -218,13 +226,16 @@ export class VariantService {
       throw new NotFoundException(`Không tìm thấy variant id=${id}`);
     }
 
-    if (variant.version !== dto.version) {
+    // Phân rã đối tượng dto trước. Dùng biến 'version' để kiểm tra,
+    // qua đó biến này được sử dụng (giải quyết lỗi unused vars)
+    const { version, reason, stockQuantity, ...rest } = dto;
+
+    if (variant.version !== version) {
       throw new ConflictException(
         `Xung đột phiên bản: variant đã được cập nhật (version hiện tại: ${variant.version})`,
       );
     }
 
-    const { version: _v, reason, stockQuantity, ...rest } = dto;
     const oldStock = variant.stockQuantity;
 
     Object.assign(variant, rest);
@@ -275,7 +286,9 @@ export class VariantService {
     variantId: number,
     dto: AddProductImageDto,
   ): Promise<ProductImage> {
-    const variant = await this.variantRepo.findOne({ where: { id: variantId } });
+    const variant = await this.variantRepo.findOne({
+      where: { id: variantId },
+    });
     if (!variant) {
       throw new NotFoundException(`Không tìm thấy variant id=${variantId}`);
     }
@@ -284,7 +297,7 @@ export class VariantService {
       productId: variant.productId,
       variantId,
       imageUrl: dto.imageUrl,
-      altText: dto.altText ?? null,
+      altText: dto.altText ?? null, // Lưu ý: Nếu cột này cũng báo lỗi null, hãy đổi thành undefined như ở trên nhé
       displayOrder: dto.displayOrder ?? 1,
     });
 

@@ -14,7 +14,7 @@ import { Attribute } from './attribute.entity';
 import { ProductVariantOption } from '@modules/variant/entities/product-variant-option.entity';
 
 @Entity('attribute_values')
-@Unique(['attribute_id', 'value'])
+@Unique(['attributeId', 'value'])
 export class AttributeValue {
   @PrimaryGeneratedColumn()
   id: number;

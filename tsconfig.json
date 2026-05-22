@@ -29,6 +29,5 @@
     "strictBindCallApply": false,
     "strictPropertyInitialization": false,
     "noFallthroughCasesInSwitch": false,
-    "ignoreDeprecations": "6.0"
   }
 }
