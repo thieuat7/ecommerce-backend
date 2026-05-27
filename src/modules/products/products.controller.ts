@@ -17,7 +17,10 @@ import { ProductsService, PaginatedResult } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FilterProductDto } from './dto/filter-product.dto';
-import { AddProductImageDto, UpdateImageOrderDto } from './dto/product-image.dto';
+import {
+  AddProductImageDto,
+  UpdateImageOrderDto,
+} from './dto/product-image.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/product-image.entity';
@@ -34,13 +37,17 @@ export class ProductsController {
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Danh sách sản phẩm (lọc + phân trang)' })
-  findAll(@Query() filterDto: FilterProductDto): Promise<PaginatedResult<Product>> {
+  findAll(
+    @Query() filterDto: FilterProductDto,
+  ): Promise<PaginatedResult<Product>> {
     return this.productsService.findAll(filterDto);
   }
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Chi tiết sản phẩm (kèm variants, images, categories)' })
+  @ApiOperation({
+    summary: 'Chi tiết sản phẩm (kèm variants, images, categories)',
+  })
   @ApiResponse({ status: 404, description: 'Sản phẩm không tồn tại' })
   findOne(@Param('id', ParseIntPipe) id: number): Promise<Product> {
     return this.productsService.findOne(id);
@@ -64,7 +71,10 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Cập nhật sản phẩm (Admin only) – Cần gửi version hiện tại',
   })
-  @ApiResponse({ status: 409, description: 'Xung đột phiên bản (optimistic lock)' })
+  @ApiResponse({
+    status: 409,
+    description: 'Xung đột phiên bản (optimistic lock)',
+  })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,

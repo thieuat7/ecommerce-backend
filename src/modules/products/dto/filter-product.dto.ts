@@ -30,7 +30,10 @@ export class FilterProductDto {
   categoryId?: number;
 
   // ─── LỌC THEO TRẠNG THÁI ───────────────────────────────────────────────────
-  @ApiPropertyOptional({ example: true, description: 'Lọc theo trạng thái hoạt động' })
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Lọc theo trạng thái hoạt động',
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === 'true') return true;
@@ -77,7 +80,10 @@ export class FilterProductDto {
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
 
   // ─── PHÂN TRANG ─────────────────────────────────────────────────────────────
-  @ApiPropertyOptional({ example: 1, description: 'Trang hiện tại (bắt đầu từ 1)' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Trang hiện tại (bắt đầu từ 1)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
