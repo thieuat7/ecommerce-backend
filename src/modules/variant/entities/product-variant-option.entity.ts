@@ -7,7 +7,7 @@ import {
   Unique,
   Index,
 } from 'typeorm';
-import { ProductVariant } from './product_variant.entity';
+import { ProductVariant } from './product-variant.entity';
 import { AttributeValue } from '@modules/attribute/entities/attribute-value.entity';
 
 @Entity('product_variant_options')

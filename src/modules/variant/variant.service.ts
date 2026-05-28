@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { createHash } from 'crypto';
-import { ProductVariant } from './entities/product_variant.entity';
+import { ProductVariant } from './entities/product-variant.entity';
 import { ProductVariantOption } from './entities/product-variant-option.entity';
 import { ProductImage } from '@modules/products/entities/product-image.entity';
 import { StockLog } from '@modules/stock-logs/entities/stock-log.entity';

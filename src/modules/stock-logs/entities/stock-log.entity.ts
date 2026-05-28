@@ -10,7 +10,7 @@ import {
   Index,
 } from 'typeorm';
 import { Product } from '@modules/products/entities/product.entity';
-import { ProductVariant } from '@modules/variant/entities/product_variant.entity';
+import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 import { User } from '@modules/users/entities/user.entity';
 import { StockLogAction } from '../enums/stock-log-action.enum';
 

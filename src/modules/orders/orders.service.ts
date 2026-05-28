@@ -14,7 +14,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderStatus } from './enums/order-status.enum';
 
-import { ProductVariant } from '@modules/variant/entities/product_variant.entity';
+import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 
 const MAX_RETRY = 3;
 

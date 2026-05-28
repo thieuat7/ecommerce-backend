@@ -13,7 +13,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { Category } from '@modules/categories/entities/category.entity';
 import { ProductImage } from './product-image.entity';
-import { ProductVariant } from '@modules/variant/entities/product_variant.entity';
+import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 
 @Entity('products')
 export class Product {
