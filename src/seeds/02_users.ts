@@ -114,9 +114,9 @@ export async function seed(knex: Knex): Promise<void> {
       .ignore();
 
     // Địa chỉ mặc định cho customer1
-    const addr1Exists = await trx('user_addresses')
+    const addr1Exists = await trx<IdRow>('user_addresses')
       .where({ user_id: customer1.id, label: 'Nhà riêng' })
-      .first('id');
+      .first();
 
     if (!addr1Exists) {
       await trx('user_addresses').insert({
@@ -134,9 +134,9 @@ export async function seed(knex: Knex): Promise<void> {
     }
 
     // Địa chỉ cho customer2
-    const addr2Exists = await trx('user_addresses')
+    const addr2Exists = await trx<IdRow>('user_addresses')
       .where({ user_id: customer2.id, label: 'Văn phòng' })
-      .first('id');
+      .first();
 
     if (!addr2Exists) {
       await trx('user_addresses').insert({
