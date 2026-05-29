@@ -11,8 +11,17 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import type { File as MulterFile } from 'multer';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import { ProductsService, PaginatedResult } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -21,7 +30,9 @@ import {
   AddProductImageDto,
   UpdateImageOrderDto,
 } from './dto/product-image.dto';
+import { CreateProductWithVariantsDto } from './dto/create-product-with-variants.dto';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
+import { GetCurrentUser } from '@common/decorators/get-current-user.decorator';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/product-image.entity';
 
@@ -60,9 +71,50 @@ export class ProductsController {
   @Post()
   @UseAuth('admin')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Tạo sản phẩm mới (Admin only)' })
+  @ApiOperation({
+    summary: 'Tao san pham moi - JSON Body don gian (Admin only)',
+  })
   create(@Body() dto: CreateProductDto): Promise<Product> {
     return this.productsService.create(dto);
+  }
+
+  @Post('with-variants')
+  @UseAuth('admin')
+  @UseInterceptors(AnyFilesInterceptor())
+  @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Tao san pham + variants + upload anh mot lan (Admin only)',
+    description:
+      'Gui multipart/form-data. Text fields: name, price, description, isActive, categoryIds (JSON string), variants (JSON string array). Files: generalImages (nhieu file), variantImage_0, variantImage_1... (theo index bien the)',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Tao thanh cong, tra ve product day du relations',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'JSON variants/categoryIds khong hop le',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Category hoac attribute value khong ton tai',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'SKU hoac to hop attribute da ton tai',
+  })
+  createWithVariants(
+    @Body() dto: CreateProductWithVariantsDto,
+    @UploadedFiles() files: MulterFile[],
+    @GetCurrentUser('userId') userId?: number,
+  ): Promise<Product> {
+    const fileMap: Record<string, MulterFile[]> = {};
+    for (const file of files ?? []) {
+      if (!fileMap[file.fieldname]) fileMap[file.fieldname] = [];
+      fileMap[file.fieldname].push(file);
+    }
+    return this.productsService.createWithVariants(dto, fileMap, userId);
   }
 
   @Put(':id')

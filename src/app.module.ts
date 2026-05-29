@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 
 import { DatabaseModule } from '@database/database.module';
 import { ConfigModule } from '@nestjs/config';
+import { StorageModule } from '@modules/storage/storage.module';
 
 import { UsersModule } from '@modules/users/users.module';
 import { AuthModule } from '@modules/auth/auth.module';
@@ -33,6 +34,7 @@ import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
     ProductsModule,
     VariantModule,
     StockLogsModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

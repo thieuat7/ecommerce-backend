@@ -10,16 +10,13 @@ import { MinioStorageAdapter } from './infrastructure/adapters/minio-storage.ada
 
   providers: [
     {
-      // 2. Khai báo Token: Khi có ai gọi I_STORAGE_PORT...
+      // 2. Khai báo Token:
       provide: I_STORAGE_PORT,
-
-      // ...thì hãy giao cho họ một instance của MinioStorageAdapter
       useClass: MinioStorageAdapter,
     },
   ],
 
-  // 3. XUẤT KHẨU (Export) Token thay vì Class.
-  // Các module khác sẽ chỉ biết đến Interface, hoàn toàn mù mịt về Adapter.
+  // 3. Exports Token thay vì Class.
   exports: [I_STORAGE_PORT],
 })
-export class StorageModule {} // 4. Đổi tên thành StorageModule
+export class StorageModule {}

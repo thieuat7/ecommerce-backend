@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere } from 'typeorm';
@@ -13,8 +12,6 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
-
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -23,7 +20,6 @@ export class UsersService {
   ) {}
 
   /**
-   * HÀM TÌM KIẾM TỔNG HỢP (THAY THẾ CHO 7 HÀM CŨ)
    * Giúp lấy User kèm theo Password hoặc Roles một cách linh hoạt
    */
   async findOne(

@@ -15,18 +15,15 @@ export class MinioStorageAdapter implements IStoragePort, OnModuleInit {
 
   onModuleInit() {
     this.client = new Client({
-      endPoint: this.configService.get<string>('MINIO_ENDPOINT', 'localhost'),
-      port: this.configService.get<number>('MINIO_PORT', 9000),
-      useSSL: this.configService.get<boolean>('MINIO_USE_SSL', false),
-      accessKey: this.configService.get<string>(
-        'MINIO_ACCESS_KEY',
-        'minioadmin',
-      ),
-      secretKey: this.configService.get<string>(
-        'MINIO_SECRET_KEY',
-        'minioadmin',
-      ),
+      endPoint: this.configService.getOrThrow<string>('MINIO_ENDPOINT'),
+      port: Number(this.configService.getOrThrow<number>('MINIO_PORT')),
+      useSSL: this.configService.getOrThrow<string>('MINIO_USE_SSL') === 'true',
+      accessKey: this.configService.getOrThrow<string>('MINIO_ACCESS_KEY'),
+      secretKey: this.configService.getOrThrow<string>('MINIO_SECRET_KEY'),
     });
+    this.logger.log(
+      'MinIO Client initialized successfully with environment variables.',
+    );
   }
 
   async uploadFile(file: IFileDto, bucketName: string): Promise<string> {
