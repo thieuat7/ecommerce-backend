@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -8,75 +8,152 @@ import {
   IsBoolean,
   MaxLength,
   Min,
+  IsArray,
+  IsInt,
+  ValidateNested,
 } from 'class-validator';
+import { BadRequestException } from '@nestjs/common';
 
-// ─── DTO con: một biến thể trong request multipart ───────────────────────────
-// FE gửi dưới dạng JSON.stringify rồi parse lại ở service
+// ─── DTO con: Variant ───────────────────────────
 
-export interface VariantInFormDto {
-  sku?: string;
-  price: number;
-  stockQuantity: number;
-  isActive?: boolean;
-  attributeValueIds: number[];
-  reason?: string;
-}
-
-// ─── DTO chính nhận từ @Body() multipart/form-data ───────────────────────────
-
-export class CreateProductWithVariantsDto {
-  @ApiProperty({ example: 'iPhone 15 Pro Max', description: 'Tên sản phẩm' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  name: string;
-
-  @ApiPropertyOptional({ example: 'Mô tả sản phẩm...', description: 'Mô tả' })
+export class VariantDto {
   @IsOptional()
   @IsString()
-  description?: string;
+  sku?: string;
 
-  @ApiProperty({
-    example: '29990000',
-    description: 'Giá cơ bản (BE sẽ ép kiểu Number)',
-  })
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   price: number;
 
-  @ApiPropertyOptional({
-    example: 'true',
-    description: 'Trạng thái hiển thị (mặc định: true)',
-  })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  stockQuantity: number;
+
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : value,
+  )
   @IsBoolean()
-  @Type(() => Boolean)
   isActive?: boolean;
 
-  /**
-   * FE stringify: JSON.stringify([1, 3])
-   * BE sẽ JSON.parse() thủ công trong service.
-   */
-  @ApiPropertyOptional({
-    example: '[1, 3]',
-    description: 'JSON string của mảng categoryId',
+  @IsArray()
+  @Transform(({ value }: { value: unknown }) => {
+    if (!Array.isArray(value)) return [Number(value)];
+    return value.map((v: unknown) => Number(v));
   })
+  @IsInt({ each: true })
+  attributeValueIds: number[];
+
   @IsOptional()
   @IsString()
-  categoryIds?: string; // raw string, parse trong service
+  reason?: string;
+}
 
-  /**
-   * FE stringify toàn bộ mảng variants:
-   * JSON.stringify([{ sku, price, stockQuantity, attributeValueIds, reason }])
-   * BE sẽ JSON.parse() trong service.
-   */
+// ─── DTO chính ───────────────────────────
+
+export class CreateProductWithVariantsDto {
+  @ApiProperty({ example: 'iPhone 15 Pro Max' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  name: string;
+
+  @ApiPropertyOptional({ example: 'Mô tả sản phẩm...' })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiProperty({ example: 29990000 })
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  price: number;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : value,
+  )
+  @IsBoolean()
+  isActive?: boolean;
+
+  // 🔥 categoryIds: string → number[]
+  @ApiPropertyOptional({
+    example: '[1,3]',
+    description: 'JSON string hoặc array',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (!value) return [];
+
+    if (Array.isArray(value)) return value.map(Number);
+
+    if (typeof value === 'string') {
+      try {
+        // Ép kiểu rõ ràng sau khi parse để tránh lỗi unsafe assignment
+        const parsed = JSON.parse(value) as unknown;
+
+        if (!Array.isArray(parsed)) throw new Error();
+
+        return parsed.map((v: unknown) => {
+          const num = Number(v);
+          if (!Number.isInteger(num)) {
+            throw new BadRequestException('categoryIds phải là số nguyên');
+          }
+          return num;
+        });
+      } catch {
+        throw new BadRequestException(
+          'categoryIds phải là JSON string hợp lệ, ví dụ: "[1,3]"',
+        );
+      }
+    }
+    return [];
+  })
+  @IsInt({ each: true })
+  categoryIds: number[];
+
+  // 🔥 variants: string → object[]
   @ApiPropertyOptional({
     example:
-      '[{"sku":"IP15PM-256","price":29990000,"stockQuantity":50,"attributeValueIds":[10,25]}]',
-    description: 'JSON string của mảng variants',
+      '[{"sku":"IP15","price":1000,"stockQuantity":10,"attributeValueIds":[1,2]}]',
   })
   @IsOptional()
-  @IsString()
-  variants?: string; // raw string, parse trong service
+  @Transform(({ value }: { value: unknown }) => {
+    if (!value) return [];
+
+    let parsed: unknown = value;
+
+    // 1. Nếu dữ liệu là chuỗi (từ form-data gửi lên) thì Parse ra
+    if (typeof value === 'string') {
+      try {
+        // Ép kiểu as unknown để ESLint không bắt lỗi
+        parsed = JSON.parse(value) as unknown;
+      } catch {
+        throw new BadRequestException('variants phải là JSON string hợp lệ');
+      }
+    }
+
+    // 2. Đảm bảo dữ liệu sau khi parse là một mảng
+    if (!Array.isArray(parsed)) {
+      throw new BadRequestException('variants phải là một mảng');
+    }
+
+    // 3. 🎯 QUAN TRỌNG NHẤT: Chuyển đổi Plain Object thành Instance của VariantDto
+    // Ép kiểu mảng thành object[] để hàm plainToInstance hoạt động mượt mà
+    return plainToInstance(VariantDto, parsed as Record<string, unknown>[]);
+  })
+  @ValidateNested({ each: true })
+  @Type(() => VariantDto)
+  variants: VariantDto[];
 }

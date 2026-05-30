@@ -25,7 +25,6 @@ import {
   UpdateImageOrderDto,
 } from './dto/product-image.dto';
 import { CreateProductWithVariantsDto } from './dto/create-product-with-variants.dto';
-import type { VariantInFormDto } from './dto/create-product-with-variants.dto';
 import { I_STORAGE_PORT } from '@modules/storage/core/ports/storage.port';
 import type { IStoragePort } from '@modules/storage/core/ports/storage.port';
 import type { File as MulterFile } from 'multer';
@@ -138,34 +137,10 @@ export class ProductsService {
     files: Record<string, MulterFile[]>,
     currentUserId?: number,
   ): Promise<Product> {
-    // ── 1. Parse categoryIds & variants từ JSON string ────────────────────
-    let categoryIds: number[] = [];
-    if (dto.categoryIds) {
-      try {
-        const parsed = JSON.parse(dto.categoryIds);
-        if (!Array.isArray(parsed)) throw new Error();
-        categoryIds = parsed.map(Number);
-      } catch {
-        throw new BadRequestException(
-          'categoryIds phải là JSON string hợp lệ, ví dụ: "[1, 3]"',
-        );
-      }
-    }
+    const categoryIds = dto.categoryIds ?? [];
+    const variantDtos = dto.variants ?? [];
 
-    let variantDtos: VariantInFormDto[] = [];
-    if (dto.variants) {
-      try {
-        const parsed = JSON.parse(dto.variants);
-        if (!Array.isArray(parsed)) throw new Error();
-        variantDtos = parsed as VariantInFormDto[];
-      } catch {
-        throw new BadRequestException(
-          'variants phải là JSON string hợp lệ của mảng biến thể',
-        );
-      }
-    }
-
-    // ── 2. Validate categories ────────────────────────────────────────────
+    // ── 1. Validate categories ────────────────────────────────────────────
     let categories: Category[] = [];
     if (categoryIds.length > 0) {
       categories = await this.categoryRepo.find({
@@ -180,7 +155,7 @@ export class ProductsService {
       }
     }
 
-    // ── 3. Validate attribute values của tất cả variants ─────────────────
+    // ── 2. Validate attribute values của tất cả variants ─────────────────
     const allAttrValueIds = [
       ...new Set(variantDtos.flatMap((v) => v.attributeValueIds)),
     ];
@@ -198,7 +173,7 @@ export class ProductsService {
       }
     }
 
-    // ── 4. Kiểm tra trùng lặp option_hash trong cùng request ────────────
+    // ── 3. Kiểm tra trùng lặp option_hash trong cùng request ────────────
     const seenHashes = new Set<string>();
     const variantMeta = variantDtos.map((v, index) => {
       const hash = this.buildOptionHash(v.attributeValueIds);
@@ -211,7 +186,7 @@ export class ProductsService {
       return { ...v, optionHash: hash, index };
     });
 
-    // ── 5. Upload ảnh chung (generalImages) ──────────────────────────────
+    // ── 4. Upload ảnh chung (generalImages) ──────────────────────────────
     const BUCKET = 'products';
     const generalImageUrls: string[] = [];
     const generalFiles: MulterFile[] = files?.['generalImages'] ?? [];
@@ -226,10 +201,11 @@ export class ProductsService {
         BUCKET,
       );
       generalImageUrls.push(url);
+      // Giả định bạn có this.logger. Nếu không dùng thì có thể xóa dòng dưới
       this.logger.log(`Uploaded general image: ${url}`);
     }
 
-    // ── 6. Upload ảnh từng variant (variantImage_0, variantImage_1...) ───
+    // ── 5. Upload ảnh từng variant (variantImage_0, variantImage_1...) ───
     const variantImageUrls: Map<number, string> = new Map();
     for (const meta of variantMeta) {
       const key = `variantImage_${meta.index}`;
@@ -249,7 +225,7 @@ export class ProductsService {
       }
     }
 
-    // ── 7. Tạo Product ────────────────────────────────────────────────────
+    // ── 6. Tạo Product ────────────────────────────────────────────────────
     const slug = await this.generateUniqueSlug(dto.name);
     const product = this.productRepo.create({
       publicId: uuidv4(),
@@ -263,7 +239,7 @@ export class ProductsService {
     });
     const savedProduct = await this.productRepo.save(product);
 
-    // ── 8. Lưu ảnh chung vào product_images ─────────────────────────────
+    // ── 7. Lưu ảnh chung vào product_images ─────────────────────────────
     if (generalImageUrls.length > 0) {
       const images = generalImageUrls.map((url, i) =>
         this.imageRepo.create({
@@ -276,9 +252,9 @@ export class ProductsService {
       await this.imageRepo.save(images);
     }
 
-    // ── 9. Tạo từng Variant ───────────────────────────────────────────────
+    // ── 8. Tạo từng Variant ───────────────────────────────────────────────
     for (const meta of variantMeta) {
-      // 9a. Sinh hoặc validate SKU
+      // 8a. Sinh hoặc validate SKU
       let sku = meta.sku;
       if (!sku) {
         sku = this.generateSku(savedProduct.publicId, meta.optionHash);
@@ -290,7 +266,7 @@ export class ProductsService {
         );
       }
 
-      // 9b. Lưu variant
+      // 8b. Lưu variant
       const variant = this.variantRepo.create({
         productId: savedProduct.id,
         sku,
@@ -302,7 +278,7 @@ export class ProductsService {
       });
       const savedVariant = await this.variantRepo.save(variant);
 
-      // 9c. Lưu variant options (attribute values)
+      // 8c. Lưu variant options (attribute values)
       const options = meta.attributeValueIds.map((avId) =>
         this.optionRepo.create({
           variantId: savedVariant.id,
@@ -311,7 +287,7 @@ export class ProductsService {
       );
       await this.optionRepo.save(options);
 
-      // 9d. Ghi stock log nếu stockQuantity > 0
+      // 8d. Ghi stock log nếu stockQuantity > 0
       if ((meta.stockQuantity ?? 0) > 0) {
         const log = this.stockLogRepo.create({
           productId: savedProduct.id,
@@ -326,7 +302,7 @@ export class ProductsService {
         await this.stockLogRepo.save(log);
       }
 
-      // 9e. Lưu ảnh variant nếu có
+      // 8e. Lưu ảnh variant nếu có
       const variantImgUrl = variantImageUrls.get(meta.index);
       if (variantImgUrl) {
         const variantImg = this.imageRepo.create({
@@ -339,7 +315,7 @@ export class ProductsService {
       }
     }
 
-    // ── 10. Trả về product đầy đủ relations ─────────────────────────────
+    // ── 9. Trả về product đầy đủ relations ─────────────────────────────
     return this.findOne(savedProduct.id);
   }
 
@@ -360,10 +336,31 @@ export class ProductsService {
 
     const qb = this.productRepo
       .createQueryBuilder('product')
-      .leftJoinAndSelect('product.categories', 'category')
-      .leftJoinAndSelect('product.images', 'image', 'image.variantId IS NULL')
+      .leftJoin('product.categories', 'category')
+      .leftJoin('product.images', 'image', 'image.variantId IS NULL')
+
+      // 2. Chỉ định rõ những trường cần lấy ra bằng .select()
+      .select([
+        // Các trường của Product
+        'product.id',
+        'product.publicId',
+        'product.name',
+        'product.slug',
+        'product.price',
+        'product.isActive',
+
+        // Các trường của Category
+        'category.id',
+        'category.name',
+
+        // Các trường của Image
+        'image.id',
+        'image.imageUrl',
+        'image.displayOrder',
+      ])
       .where('product.deletedAt IS NULL');
 
+    // Các bộ lọc giữ nguyên như cũ
     if (name) {
       qb.andWhere('LOWER(product.name) LIKE LOWER(:name)', {
         name: `%${name}%`,
@@ -383,6 +380,7 @@ export class ProductsService {
     }
 
     const sortField = `product.${sortBy}`;
+    qb.addSelect(sortField);
     qb.orderBy(sortField, sortOrder)
       .skip((page - 1) * limit)
       .take(limit);

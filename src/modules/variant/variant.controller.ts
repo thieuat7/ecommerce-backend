@@ -9,7 +9,11 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import type { File as MulterFile } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { VariantService } from './variant.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
@@ -62,12 +66,15 @@ export class VariantController {
     status: 409,
     description: 'Tổ hợp attributes hoặc SKU đã tồn tại',
   })
+  @UseInterceptors(FilesInterceptor('images', 5))
   create(
     @Param('productId', ParseIntPipe) productId: number,
     @Body() dto: CreateVariantDto,
+    @UploadedFiles() files: MulterFile[],
     @GetCurrentUser('userId') userId?: number,
   ) {
-    return this.variantService.create(productId, dto, userId);
+    console.log('Received files:', dto);
+    return this.variantService.create(productId, dto, files, userId);
   }
 
   @Put('variants/:id')

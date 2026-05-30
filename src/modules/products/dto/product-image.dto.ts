@@ -1,15 +1,28 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min, MaxLength, IsUrl } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  MaxLength,
+} from 'class-validator';
 
 export class AddProductImageDto {
-  @ApiProperty({ example: 'https://cdn.example.com/product.jpg', description: 'URL hình ảnh' })
+  @ApiProperty({
+    example: 'https://cdn.example.com/product.jpg',
+    description: 'URL hình ảnh',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   imageUrl: string;
 
-  @ApiPropertyOptional({ example: 'iPhone 15 Pro Max', description: 'Alt text' })
+  @ApiPropertyOptional({
+    example: 'iPhone 15 Pro Max',
+    description: 'Alt text',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(255)

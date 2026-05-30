@@ -16,6 +16,11 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { AddProductImageDto } from '@modules/products/dto/product-image.dto';
 import { StockLogAction } from '@modules/stock-logs/enums/stock-log-action.enum';
+import type { File as MulterFile } from 'multer';
+
+import { I_STORAGE_PORT } from '@modules/storage/core/ports/storage.port';
+import type { IStoragePort } from '@modules/storage/core/ports/storage.port';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class VariantService {
@@ -32,6 +37,8 @@ export class VariantService {
     private readonly attrValueRepo: Repository<AttributeValue>,
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
+    @Inject(I_STORAGE_PORT)
+    private readonly storagePort: IStoragePort,
   ) {}
 
   // ─── HELPER: Tính option_hash ─────────────────────────────────────────────
@@ -129,6 +136,7 @@ export class VariantService {
   async create(
     productId: number,
     dto: CreateVariantDto,
+    files: MulterFile[],
     currentUserId?: number,
   ): Promise<ProductVariant> {
     // 1. Validate product
@@ -211,6 +219,35 @@ export class VariantService {
       );
     }
 
+    // ──────────────── THÊM MỚI BƯỚC 9: XỬ LÝ ẢNH ────────────────
+    // 9. Tải ảnh lên và lưu vào DB
+    if (files && files.length > 0) {
+      // 9.1: Chuyển đổi Express.Multer.File sang IFileDto mà Storage Service mong muốn
+      const fileDtos = files.map((file) => ({
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      }));
+
+      // 9.2: Gọi service lưu trữ file với 2 tham số (danh sách IFileDto và tên bucket)
+      const uploadedUrls = await Promise.all(
+        fileDtos.map((file) => this.storagePort.uploadFile(file, 'products')),
+      );
+
+      // 9.3: Tạo dữ liệu entity lưu vào bảng hình ảnh
+      const imageEntities = uploadedUrls.map((url, index) => {
+        return this.imageRepo.create({
+          productId: productId,
+          variantId: savedVariant.id,
+          imageUrl: url,
+          displayOrder: index,
+        });
+      });
+
+      // 9.4: Lưu tất cả vào DB
+      await this.imageRepo.save(imageEntities);
+    }
     return this.findOne(savedVariant.id);
   }
 
