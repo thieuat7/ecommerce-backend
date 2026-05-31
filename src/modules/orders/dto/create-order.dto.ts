@@ -6,42 +6,60 @@ import {
   IsInt,
   IsPositive,
   IsOptional,
-  IsEnum,
+  ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrderStatus } from '../enums/order-status.enum';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
- * DTO cho từng món hàng trong đơn hàng
+ * DTO cho từng dòng hàng trong đơn hàng.
+ * Mỗi item bắt buộc phải chỉ định variantId (biến thể cụ thể).
  */
 export class CreateOrderItemDto {
-  // Đã cập nhật: Sử dụng variantId thay vì productId
-  @IsInt()
-  @IsPositive({ message: 'ID biến thể sản phẩm phải là số dương' })
+  @ApiProperty({
+    description: 'ID của biến thể sản phẩm (ProductVariant)',
+    example: 3,
+  })
+  @IsInt({ message: 'variantId phải là số nguyên' })
+  @IsPositive({ message: 'variantId phải là số dương' })
   variantId: number;
 
-  @IsInt()
+  @ApiProperty({
+    description: 'Số lượng mua (tối thiểu 1)',
+    example: 2,
+    minimum: 1,
+  })
+  @IsInt({ message: 'quantity phải là số nguyên' })
   @IsPositive({ message: 'Số lượng phải lớn hơn 0' })
   quantity: number;
 }
 
 /**
- * DTO chính để tạo Đơn hàng
+ * DTO chính để tạo Đơn hàng.
  */
 export class CreateOrderDto {
+  @ApiProperty({
+    description: 'Địa chỉ giao hàng đầy đủ',
+    example: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
+  })
   @IsString()
   @IsNotEmpty({ message: 'Địa chỉ giao hàng không được để trống' })
   shippingAddress: string;
 
-  @IsArray()
-  @ValidateNested({ each: true }) // Kiểm tra từng phần tử trong mảng items
+  @ApiProperty({
+    description: 'Danh sách các sản phẩm (biến thể) trong đơn hàng',
+    type: [CreateOrderItemDto],
+  })
+  @IsArray({ message: 'items phải là một mảng' })
+  @ArrayMinSize(1, { message: 'Đơn hàng phải có ít nhất 1 sản phẩm' })
+  @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];
 
-  @IsOptional()
-  @IsEnum(OrderStatus, { message: 'Trạng thái đơn hàng không hợp lệ' })
-  status?: OrderStatus;
-
+  @ApiPropertyOptional({
+    description: 'Mã đơn hàng tùy chỉnh (để trống hệ thống sẽ tự sinh)',
+    example: 'ORD-20260101-001',
+  })
   @IsOptional()
   @IsString()
   orderCode?: string;

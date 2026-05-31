@@ -10,11 +10,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, QueryFailedError } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { OrderItem } from '@modules/order-items/entities/order-item.entity';
+import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderStatus } from './enums/order-status.enum';
-
-import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 
 const MAX_RETRY = 3;
 
@@ -28,14 +27,13 @@ export class OrdersService {
     private readonly ordersRepository: Repository<Order>,
   ) {}
 
-  // ─── Tạo đơn hàng ────────────────────────────────────────────────────
+  // ─── Tạo đơn hàng (Transaction + Pessimistic Lock) ──────────────────────────
   async create(
     createOrderDto: CreateOrderDto & { userId: number },
   ): Promise<Order> {
-    const { userId, items, shippingAddress, status, orderCode } =
-      createOrderDto;
+    const { userId, items, shippingAddress, orderCode } = createOrderDto;
 
-    // 1. Loại bỏ trùng lặp variantId gửi lên từ client
+    // Gộp các variantId trùng nhau (cộng dồn quantity)
     const mergedItems = this.mergeItems(items);
     let attempt = 0;
 
@@ -44,14 +42,18 @@ export class OrdersService {
       try {
         return await this.dataSource.transaction(async (manager) => {
           let totalAmount = 0;
-          const orderItemsData: any[] = [];
+          const orderItemsData: {
+            product: ProductVariant['product'];
+            variant: ProductVariant;
+            quantity: number;
+            priceAtPurchase: number;
+          }[] = [];
 
-          // ── Bước 1: Lock & validate từng biến thể (Variant) ───────────────
+          // ── Bước 1: Validate & lock từng variant ──────────────────────────
           for (const item of mergedItems) {
-            // Tìm Variant và Join kèm với Product gốc để lấy giá dự phòng
             const variant = await manager.findOne(ProductVariant, {
               where: { id: item.variantId },
-              relations: ['product'], // Cần join product để lấy giá gốc nếu variant price là null
+              relations: ['product'],
               lock: { mode: 'pessimistic_write' },
             });
 
@@ -63,108 +65,297 @@ export class OrdersService {
 
             const product = variant.product;
 
-            if (!product.isActive || !variant.isActive) {
+            if (!product.isActive) {
               throw new BadRequestException(
-                `Sản phẩm hoặc biến thể "${product.name}" hiện không hoạt động.`,
+                `Sản phẩm "${product.name}" hiện không còn kinh doanh`,
               );
             }
 
-            // Kiểm tra tồn kho (Bây giờ lấy từ variant.stockQuantity)
+            if (!variant.isActive) {
+              throw new BadRequestException(
+                `Biến thể của "${product.name}" (id=${variant.id}) hiện không còn kinh doanh`,
+              );
+            }
+
+            // ── Bước 2: Kiểm tra tồn kho ────────────────────────────────────
             if (variant.stockQuantity < item.quantity) {
               throw new BadRequestException(
-                `Biến thể của "${product.name}" không đủ tồn kho. Còn lại: ${variant.stockQuantity}`,
+                `Biến thể của "${product.name}" không đủ tồn kho. Còn lại: ${variant.stockQuantity}, yêu cầu: ${item.quantity}`,
               );
             }
 
-            // ── Bước 2: Cập nhật tồn kho vào Variant ──────────────────────────
+            // ── Bước 3: Trừ tồn kho ─────────────────────────────────────────
             variant.stockQuantity -= item.quantity;
             await manager.save(ProductVariant, variant);
 
-            // ── Bước 3: Tính toán giá (Ưu tiên variant.price, nếu NULL thì lấy product.price)
-            const finalPrice =
-              variant.price !== null && variant.price !== undefined
-                ? Number(variant.price)
-                : Number(product.price);
-
-            const itemTotal = finalPrice * item.quantity;
-            totalAmount += itemTotal;
+            // ── Bước 4: Tính giá (ưu tiên variant.price, fallback product.price)
+            const finalPrice = Number(variant.price ?? product.price);
+            totalAmount += finalPrice * item.quantity;
 
             orderItemsData.push({
-              product: product,
-              variant: variant, // Lưu trữ thêm variant vào OrderItem
+              product,
+              variant,
               quantity: item.quantity,
               priceAtPurchase: finalPrice,
             });
           }
 
-          // ── Bước 4: Tạo Order chính ────────────────────────────────────────
+          // ── Bước 5: Tạo Order ────────────────────────────────────────────
           const finalOrderCode =
             orderCode ||
-            `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            `ORD-${Date.now()}-${Math.floor(Math.random() * 10000)
+              .toString()
+              .padStart(4, '0')}`;
 
           const newOrder = manager.create(Order, {
             user: { id: userId },
             orderCode: finalOrderCode,
-            status: status || OrderStatus.PENDING,
-            totalAmount: totalAmount,
-            shippingAddress: shippingAddress,
+            status: OrderStatus.PENDING,
+            totalAmount,
+            shippingAddress,
           });
 
           const savedOrder = await manager.save(Order, newOrder);
 
-          // ── Bước 5: Tạo OrderItems gắn với Order ──────────────────────────
-          const orderItems = orderItemsData.map((item) =>
+          // ── Bước 6: Tạo OrderItems ───────────────────────────────────────
+          const orderItems = orderItemsData.map((data) =>
             manager.create(OrderItem, {
-              ...item,
-              order: savedOrder, // Gán quan hệ với order vừa tạo
+              order: savedOrder,
+              product: data.product,
+              variant: data.variant,
+              quantity: data.quantity,
+              priceAtPurchase: data.priceAtPurchase,
             }),
           );
           await manager.save(OrderItem, orderItems);
 
-          // Trả về order đầy đủ thông tin
+          // ── Bước 7: Reload order đầy đủ relations ────────────────────────
           const result = await manager.findOne(Order, {
             where: { id: savedOrder.id },
             relations: [
               'orderItems',
               'orderItems.product',
+              'orderItems.product.images',
               'orderItems.variant',
+              'orderItems.variant.options',
+              'orderItems.variant.options.attributeValue',
+              'orderItems.variant.options.attributeValue.attribute',
             ],
           });
 
-          if (!result) throw new Error('Failed to retrieve saved order');
+          if (!result) throw new Error('Không thể tải lại đơn hàng vừa tạo');
           return result;
         });
       } catch (error: unknown) {
-        // Xử lý Retry nếu bị deadlock
+        // Retry khi bị deadlock
         if (
           error instanceof QueryFailedError &&
-          error.message.includes('deadlock')
+          error.message.toLowerCase().includes('deadlock')
         ) {
-          this.logger.warn(`[RETRY] Xung đột lần ${attempt}/${MAX_RETRY}...`);
-          if (attempt >= MAX_RETRY)
+          this.logger.warn(
+            `[RETRY ${attempt}/${MAX_RETRY}] Deadlock khi tạo đơn hàng...`,
+          );
+          if (attempt >= MAX_RETRY) {
             throw new ConflictException('Hệ thống bận, vui lòng thử lại sau.');
-          await this.sleep(100);
+          }
+          await this.sleep(100 * attempt);
           continue;
         }
 
+        // Re-throw business errors ngay lập tức
         if (
           error instanceof NotFoundException ||
-          error instanceof BadRequestException
+          error instanceof BadRequestException ||
+          error instanceof ConflictException
         ) {
           throw error;
         }
 
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        this.logger.error(`Lỗi tạo đơn hàng: ${errorMessage}`);
+        const msg = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Lỗi tạo đơn hàng: ${msg}`, (error as Error).stack);
         throw new BadRequestException('Không thể hoàn tất đơn hàng.');
       }
     }
+
     throw new BadRequestException('Quá số lần thử lại.');
   }
 
-  // ─── Helper: gộp trùng variantId ──────────────────────────────────────────
-  // LƯU Ý: Đã đổi từ productId sang variantId vì khách mua biến thể cụ thể
+  // ─── Lấy tất cả đơn hàng của user ────────────────────────────────────────────
+  async findAllByUserId(userId: number): Promise<Order[]> {
+    return this.ordersRepository.find({
+      where: { user: { id: userId } },
+      relations: [
+        'orderItems',
+        'orderItems.product',
+        'orderItems.product.images',
+        'orderItems.variant',
+        'orderItems.variant.options',
+        'orderItems.variant.options.attributeValue',
+        'orderItems.variant.options.attributeValue.attribute',
+        'payment',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // ─── Lấy chi tiết một đơn hàng ───────────────────────────────────────────────
+  async findOneByIdAndUserId(id: number, userId: number): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id, user: { id: userId } },
+      relations: [
+        'orderItems',
+        'orderItems.product',
+        'orderItems.product.images',
+        'orderItems.variant',
+        'orderItems.variant.options',
+        'orderItems.variant.options.attributeValue',
+        'orderItems.variant.options.attributeValue.attribute',
+        'payment',
+      ],
+    });
+
+    if (!order) {
+      throw new NotFoundException(
+        `Không tìm thấy đơn hàng id=${id} hoặc bạn không có quyền truy cập.`,
+      );
+    }
+
+    return order;
+  }
+
+  // ─── Admin: lấy tất cả đơn hàng ────────────────────────────────────────────
+  async findAllForAdmin(): Promise<Order[]> {
+    return this.ordersRepository.find({
+      relations: [
+        'user',
+        'orderItems',
+        'orderItems.product',
+        'orderItems.variant',
+        'payment',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // ─── Admin: lấy chi tiết bất kỳ đơn hàng ──────────────────────────────────
+  async findOneForAdmin(orderId: number): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: [
+        'user',
+        'orderItems',
+        'orderItems.product',
+        'orderItems.product.images',
+        'orderItems.variant',
+        'orderItems.variant.options',
+        'orderItems.variant.options.attributeValue',
+        'orderItems.variant.options.attributeValue.attribute',
+        'payment',
+      ],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Không tìm thấy đơn hàng id=${orderId}`);
+    }
+
+    return order;
+  }
+
+  // ─── Cập nhật địa chỉ / trạng thái (người dùng - chỉ khi PENDING/PROCESSING) ─
+  async updateByIdAndUserId(
+    id: number,
+    userId: number,
+    dto: UpdateOrderDto,
+  ): Promise<Order> {
+    const order = await this.findOneByIdAndUserId(id, userId);
+
+    const immutableStatuses: OrderStatus[] = [
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+    ];
+
+    if (immutableStatuses.includes(order.status)) {
+      throw new ForbiddenException(
+        `Không thể cập nhật đơn hàng ở trạng thái "${order.status}".`,
+      );
+    }
+
+    // Người dùng không được tự nâng status lên DELIVERED
+    if (dto.status === OrderStatus.DELIVERED) {
+      throw new ForbiddenException(
+        'Chỉ quản trị viên mới có thể đánh dấu đơn hàng là "Đã giao".',
+      );
+    }
+
+    Object.assign(order, dto);
+    const updated = await this.ordersRepository.save(order);
+    this.logger.log(`User ${userId} cập nhật đơn hàng id=${id}`);
+
+    return updated;
+  }
+
+  // ─── Admin: cập nhật trạng thái đơn hàng ──────────────────────────────────
+  async updateStatusForAdmin(
+    orderId: number,
+    status: OrderStatus,
+  ): Promise<Order> {
+    const order = await this.findOneForAdmin(orderId);
+
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new ForbiddenException(
+        'Không thể thay đổi trạng thái đơn hàng đã bị huỷ.',
+      );
+    }
+
+    order.status = status;
+    const updated = await this.ordersRepository.save(order);
+    this.logger.log(
+      `Admin cập nhật trạng thái đơn hàng id=${orderId} → ${status}`,
+    );
+
+    return updated;
+  }
+
+  // ─── Xóa đơn hàng (chỉ khi PENDING) ──────────────────────────────────────────
+  async removeByIdAndUserId(
+    id: number,
+    userId: number,
+  ): Promise<{ message: string }> {
+    const order = await this.findOneByIdAndUserId(id, userId);
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new ForbiddenException(
+        'Chỉ có thể huỷ đơn hàng đang ở trạng thái chờ xử lý (PENDING).',
+      );
+    }
+
+    await this.ordersRepository.remove(order);
+    this.logger.log(`User ${userId} đã xóa đơn hàng id=${id}`);
+
+    return { message: 'Đã xóa đơn hàng thành công.' };
+  }
+
+  // ─── Admin: xóa bất kỳ đơn hàng ──────────────────────────────────────────────
+  async deleteOrderForAdmin(orderId: number): Promise<{ message: string }> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Không tìm thấy đơn hàng id=${orderId}`);
+    }
+
+    await this.ordersRepository.remove(order);
+    this.logger.log(`Admin đã xóa đơn hàng id=${orderId}`);
+
+    return { message: `Đã xóa đơn hàng id=${orderId} thành công.` };
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Gộp các item có cùng variantId bằng cách cộng dồn quantity.
+   */
   private mergeItems(
     items: { variantId: number; quantity: number }[],
   ): { variantId: number; quantity: number }[] {
@@ -180,64 +371,5 @@ export class OrdersService {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  // ─── Các phương thức truy vấn ──────────────────────────────────────────────
-  async findAllByUserId(userId: number): Promise<Order[]> {
-    return await this.ordersRepository.find({
-      where: { user: { id: userId } },
-      relations: ['orderItems', 'orderItems.product', 'orderItems.variant'],
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async findOneByIdAndUserId(id: number, userId: number): Promise<Order> {
-    const order = await this.ordersRepository.findOne({
-      where: { id, user: { id: userId } },
-      relations: ['orderItems', 'orderItems.product', 'orderItems.variant'],
-    });
-    if (!order) throw new NotFoundException('Đơn hàng không tồn tại.');
-    return order;
-  }
-
-  async updateByIdAndUserId(
-    id: number,
-    userId: number,
-    updateOrderDto: UpdateOrderDto,
-  ): Promise<Order> {
-    const order = await this.findOneByIdAndUserId(id, userId);
-
-    const immutableStatuses = [OrderStatus.DELIVERED, OrderStatus.CANCELLED];
-    if (immutableStatuses.includes(order.status)) {
-      throw new ForbiddenException(
-        'Không thể cập nhật đơn hàng ở trạng thái này.',
-      );
-    }
-
-    Object.assign(order, updateOrderDto);
-    return await this.ordersRepository.save(order);
-  }
-
-  async removeByIdAndUserId(
-    id: number,
-    userId: number,
-  ): Promise<{ message: string }> {
-    const order = await this.findOneByIdAndUserId(id, userId);
-    if (order.status !== OrderStatus.PENDING) {
-      throw new ForbiddenException('Chỉ có thể xóa đơn hàng đang chờ xử lý.');
-    }
-    await this.ordersRepository.remove(order);
-    return { message: 'Đã xóa đơn hàng thành công.' };
-  }
-
-  async deleteOrderForAdmin(orderId: number): Promise<{ message: string }> {
-    const order = await this.ordersRepository.findOne({
-      where: { id: orderId },
-    });
-    if (!order) {
-      throw new NotFoundException('Đơn hàng không tồn tại.');
-    }
-    await this.ordersRepository.remove(order);
-    return { message: 'Admin đã xóa đơn hàng thành công.' };
   }
 }
