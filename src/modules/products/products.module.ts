@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProductsService } from './products.service';
 import { ProductsController } from './products.controller';
+import { AdminProductsController } from './admin-products.controller';
+import { ProductReportService } from './product-report.service';
 import { Product } from './entities/product.entity';
 import { ProductImage } from './entities/product-image.entity';
 import { Category } from '@modules/categories/entities/category.entity';
@@ -22,8 +24,8 @@ import { AttributeValue } from '@modules/attribute/entities/attribute-value.enti
       AttributeValue,
     ]),
   ],
-  controllers: [ProductsController],
-  providers: [ProductsService],
+  controllers: [ProductsController, AdminProductsController],
+  providers: [ProductsService, ProductReportService],
   exports: [ProductsService, TypeOrmModule],
 })
 export class ProductsModule {}

@@ -21,7 +21,7 @@ export class CartsService {
    */
   async getMyCart(userId: number): Promise<Cart> {
     let cart = await this.cartRepository.findOne({
-      where: { user: { id: userId } },
+      where: { userId },
       relations: [
         'items',
         'items.product',
@@ -36,7 +36,8 @@ export class CartsService {
 
     if (!cart) {
       this.logger.log(`Tạo giỏ hàng mới cho user_id=${userId}`);
-      const newCart = this.cartRepository.create({ user: { id: userId } });
+      // Dùng userId column trực tiếp — không cần join sang bảng users
+      const newCart = this.cartRepository.create({ userId });
       const saved = await this.cartRepository.save(newCart);
 
       // Reload với relations đầy đủ

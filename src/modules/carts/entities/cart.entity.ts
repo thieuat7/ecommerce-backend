@@ -1,6 +1,7 @@
 import {
   Entity,
   PrimaryGeneratedColumn,
+  Column,
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
@@ -15,7 +16,15 @@ export class Cart {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToOne(() => User, (user) => user.id, { onDelete: 'CASCADE' })
+  /**
+   * Mỗi user chỉ có duy nhất một giỏ hàng.
+   * JoinColumn đặt ở đây → bảng carts lưu cột user_id.
+   * Inverse side: user.cart
+   */
+  @Column({ name: 'user_id', type: 'int', unique: true })
+  userId: number;
+
+  @OneToOne(() => User, (user) => user.cart, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 

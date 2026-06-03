@@ -83,8 +83,6 @@ export class PaymentsService {
       status: PaymentStatus.PENDING,
       transactionId: momoOrderId,
       order: { id: systemOrderId },
-      // publicId tự sinh nhờ @Generated('uuid') trong entity
-      // paidAt để null cho đến khi nhận IPN thành công
     });
 
     await this.paymentRepository.save(newPayment);

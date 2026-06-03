@@ -3,16 +3,24 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  Unique,
 } from 'typeorm';
 import { Order } from '@modules/orders/entities/order.entity';
 import { Product } from '@modules/products/entities/product.entity';
 import { ProductVariant } from '@modules/variant/entities/product-variant.entity';
 
+/**
+ * Migration check constraint (XOR):
+ *   ((product_id IS NOT NULL AND variant_id IS NULL)
+ *    OR (product_id IS NULL AND variant_id IS NOT NULL))
+ *
+ * → Mỗi order item chỉ tham chiếu đến MỘT trong hai:
+ *   • product  → dành cho sản phẩm không có biến thể
+ *   • variant  → dành cho sản phẩm có biến thể (variant đã có product_id bên trong)
+ */
 @Entity('order_items')
-@Unique('UQ_order_product_variant', ['order', 'product', 'variant'])
 export class OrderItem {
   @PrimaryGeneratedColumn()
   id: number;
@@ -21,8 +29,7 @@ export class OrderItem {
   quantity: number;
 
   /**
-   * Giá tại thời điểm mua — snapshot để tránh bị ảnh hưởng khi giá sản phẩm thay đổi sau này.
-   * Ưu tiên lấy từ variant.price, nếu variant null thì lấy product.price.
+   * Giá tại thời điểm mua — snapshot, không bị ảnh hưởng khi giá thay đổi sau.
    */
   @Column({
     name: 'price_at_purchase',
@@ -36,6 +43,26 @@ export class OrderItem {
   })
   priceAtPurchase: number;
 
+  /**
+   * Snapshot tên sản phẩm — đảm bảo hiển thị đúng dù product bị đổi tên sau.
+   */
+  @Column({ name: 'product_name', type: 'varchar', length: 255 })
+  productName: string;
+
+  /**
+   * Snapshot tên biến thể — VD: "Space Gray / 128GB".
+   * NULL nếu sản phẩm không có biến thể.
+   */
+  @Column({ name: 'variant_name', type: 'varchar', length: 255, nullable: true })
+  variantName: string | null;
+
+  /**
+   * Snapshot SKU của biến thể tại thời điểm mua.
+   * NULL nếu sản phẩm không có biến thể.
+   */
+  @Column({ name: 'sku', type: 'varchar', length: 100, nullable: true })
+  sku: string | null;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
@@ -43,27 +70,32 @@ export class OrderItem {
   })
   createdAt: Date;
 
-  // ===============================
-  // QUAN HỆ (RELATIONS)
-  // ===============================
-
-  @ManyToOne((): typeof Order => Order, (order: Order) => order.orderItems, {
-    onDelete: 'CASCADE',
+  @UpdateDateColumn({
+    name: 'updated_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
   })
+  updatedAt: Date;
+
+  // ── Relations ──────────────────────────────────────────────────────────────
+
+  @ManyToOne(() => Order, (order) => order.orderItems, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'order_id' })
   order: Order;
 
   /**
-   * Sản phẩm gốc (luôn có — để tra cứu thông tin sản phẩm dù variant có thể bị xóa)
+   * Tham chiếu sản phẩm gốc (nullable — NULL khi item thuộc variant).
+   * Dùng onDelete: RESTRICT để không xóa product khi còn order item tham chiếu.
    */
-  @ManyToOne(() => Product, { onDelete: 'NO ACTION', nullable: false })
+  @ManyToOne(() => Product, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'product_id' })
-  product: Product;
+  product: Product | null;
 
   /**
-   * Biến thể sản phẩm (nullable — sản phẩm không bắt buộc phải có biến thể)
+   * Tham chiếu biến thể (nullable — NULL khi item thuộc product trực tiếp).
+   * Dùng onDelete: RESTRICT để không xóa variant khi còn order item tham chiếu.
    */
-  @ManyToOne(() => ProductVariant, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => ProductVariant, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'variant_id' })
   variant: ProductVariant | null;
 }

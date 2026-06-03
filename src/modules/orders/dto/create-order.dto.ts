@@ -1,20 +1,16 @@
 import {
-  IsString,
-  IsNotEmpty,
   IsArray,
   ValidateNested,
   IsInt,
   IsPositive,
   IsOptional,
+  IsString,
   ArrayMinSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * DTO cho từng dòng hàng trong đơn hàng.
- * Mỗi item bắt buộc phải chỉ định variantId (biến thể cụ thể).
- */
+/** DTO cho từng dòng hàng trong đơn — bắt buộc chỉ định variantId */
 export class CreateOrderItemDto {
   @ApiProperty({
     description: 'ID của biến thể sản phẩm (ProductVariant)',
@@ -34,20 +30,19 @@ export class CreateOrderItemDto {
   quantity: number;
 }
 
-/**
- * DTO chính để tạo Đơn hàng.
- */
+/** DTO chính để tạo Đơn hàng */
 export class CreateOrderDto {
   @ApiProperty({
-    description: 'Địa chỉ giao hàng đầy đủ',
-    example: '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
+    description:
+      'ID địa chỉ giao hàng (UserAddress) của người dùng. Thông tin địa chỉ sẽ được snapshot vào đơn hàng.',
+    example: 1,
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Địa chỉ giao hàng không được để trống' })
-  shippingAddress: string;
+  @IsInt({ message: 'userAddressId phải là số nguyên' })
+  @IsPositive({ message: 'userAddressId phải là số dương' })
+  userAddressId: number;
 
   @ApiProperty({
-    description: 'Danh sách các sản phẩm (biến thể) trong đơn hàng',
+    description: 'Danh sách biến thể sản phẩm trong đơn hàng',
     type: [CreateOrderItemDto],
   })
   @IsArray({ message: 'items phải là một mảng' })

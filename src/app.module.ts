@@ -16,6 +16,9 @@ import { VariantModule } from '@modules/variant/variant.module';
 import { StockLogsModule } from '@modules/stock-logs/stock-logs.module';
 import { CartsModule } from '@modules/carts/carts.module';
 import { CartItemsModule } from '@modules/cart-items/cart-items.module';
+import { UserAddressesModule } from '@modules/user-addresses/user-addresses.module';
+import { OrdersModule } from '@modules/orders/orders.module';
+import { OrderItemsModule } from '@modules/order-items/order-items.module';
 
 import databaseConfig from '@database/database.config';
 import { ResponseInterceptor } from '@common/interceptors/response.interceptor';
@@ -39,6 +42,9 @@ import { HttpExceptionFilter } from '@common/filters/http-exception.filter';
     StorageModule,
     CartsModule,
     CartItemsModule,
+    UserAddressesModule,
+    OrdersModule,
+    OrderItemsModule,
   ],
   controllers: [AppController],
   providers: [

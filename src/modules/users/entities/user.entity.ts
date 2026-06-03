@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToMany,
+  OneToOne,
   ManyToMany,
   JoinTable,
   BeforeInsert,
@@ -15,6 +16,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Order } from '@modules/orders/entities/order.entity';
 import { Role } from '@modules/roles/entities/role.entity';
+import { UserAddress } from '@modules/user-addresses/entities/user-address.entity';
+import { Cart } from '@modules/carts/entities/cart.entity';
 
 @Entity('users')
 export class User {
@@ -107,19 +110,17 @@ export class User {
   @OneToMany(() => Order, (order) => order.user)
   orders: Order[];
 
-  /*
-   * GỢI Ý MỞ RỘNG:
-   * Dưới đây là các quan hệ dựa trên Knex Schema của bạn.
-   * Khi bạn tạo xong các Entity tương ứng (UserAuthProvider, UserAddress, Cart),
-   * bạn có thể bỏ comment (uncomment) các đoạn code dưới đây nhé.
-   */
+  @OneToMany(() => UserAddress, (address) => address.user)
+  addresses: UserAddress[];
 
   // @OneToMany(() => UserAuthProvider, (authProvider) => authProvider.user)
   // authProviders: UserAuthProvider[];
 
-  // @OneToMany(() => UserAddress, (address) => address.user)
-  // addresses: UserAddress[];
-
-  // @OneToOne(() => Cart, (cart) => cart.user)
-  // cart: Cart;
+  /**
+   * Giỏ hàng duy nhất của user (lazy — không load tự động).
+   * @JoinColumn đặt ở phía Cart (carts.user_id), nên User chỉ khai báo inverse side.
+   */
+  @OneToOne(() => Cart, (cart) => cart.user)
+  cart: Cart;
 }
+
