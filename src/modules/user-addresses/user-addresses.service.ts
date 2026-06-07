@@ -1,12 +1,11 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { UserAddress } from './entities/user-address.entity';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
@@ -30,7 +29,10 @@ export class UserAddressesService {
     return this.dataSource.transaction(async (manager) => {
       // Nếu đây là địa chỉ đầu tiên → tự động set làm mặc định
       const existingCount = await manager.count(UserAddress, {
-        where: { userId, deletedAt: null as any },
+        where: {
+          userId,
+          deletedAt: IsNull(), // Sửa lỗi tại đây
+        },
       });
 
       const isDefault =
@@ -113,8 +115,7 @@ export class UserAddressesService {
         );
       }
 
-      // Không cho phép bỏ isDefault của địa chỉ mặc định hiện tại
-      // (phải set địa chỉ khác làm mặc định trước)
+      // Không cho phép bỏ isDefault của địa chỉ mặc định hiện tại nếu không có địa chỉ nào khác được set làm mặc định
       if (dto.isDefault === false && address.isDefault) {
         const otherCount = await manager.count(UserAddress, {
           where: { userId, isDefault: true },
@@ -161,7 +162,9 @@ export class UserAddressesService {
 
       address.isDefault = true;
       const updated = await manager.save(UserAddress, address);
-      this.logger.log(`Đặt địa chỉ id=${id} làm mặc định cho user_id=${userId}`);
+      this.logger.log(
+        `Đặt địa chỉ id=${id} làm mặc định cho user_id=${userId}`,
+      );
 
       return updated;
     });
