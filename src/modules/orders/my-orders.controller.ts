@@ -48,8 +48,14 @@ export class MyOrdersController {
     description: 'Dữ liệu không hợp lệ / sản phẩm hết hàng / ngừng kinh doanh',
   })
   @ApiResponse({ status: 401, description: 'Chưa xác thực' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy địa chỉ hoặc biến thể' })
-  @ApiResponse({ status: 409, description: 'Xung đột hệ thống — vui lòng thử lại' })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy địa chỉ hoặc biến thể',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Xung đột hệ thống — vui lòng thử lại',
+  })
   async create(
     @Body() dto: CreateOrderDto,
     @GetCurrentUser('userId') userId: number,
@@ -109,7 +115,10 @@ export class MyOrdersController {
   @ApiParam({ name: 'id', description: 'ID đơn hàng cần huỷ', example: 1 })
   @ApiResponse({ status: 200, description: 'Đã huỷ đơn hàng thành công' })
   @ApiResponse({ status: 401, description: 'Chưa xác thực' })
-  @ApiResponse({ status: 403, description: 'Đơn hàng không ở trạng thái PENDING' })
+  @ApiResponse({
+    status: 403,
+    description: 'Đơn hàng không ở trạng thái PENDING',
+  })
   @ApiResponse({ status: 404, description: 'Không tìm thấy đơn hàng' })
   async cancel(
     @Param('id', ParseIntPipe) id: number,
