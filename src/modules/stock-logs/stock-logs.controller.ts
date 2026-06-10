@@ -1,55 +1,53 @@
 // stock-log.controller.ts
 import { Controller, Get, Param, Query, ParseIntPipe } from '@nestjs/common';
+
 import { StockLogsService } from './stock-logs.service';
 import { UseAuth } from '@common/decorators/use-auth.decorator';
 import { FilterStockLogDto } from './dto/filter-stock-log.dto';
 
 @Controller('stock-logs')
-// @UseGuards(AuthGuard('jwt'), RolesGuard) // Bật nếu cần xác thực
 export class StockLogController {
   constructor(private readonly stockLogService: StockLogsService) {}
 
-  /**
-   * Lấy danh sách logs có phân trang và lọc
-   */
+  // ==========================================
+  // LIST + FILTER + PAGINATION
+  // ==========================================
   @Get()
   @UseAuth('ADMIN')
-  // @Roles(UserRole.ADMIN, UserRole.MANAGER) // Ví dụ phân quyền
   async findAll(@Query() filter: FilterStockLogDto) {
     return this.stockLogService.findAll(filter);
   }
 
-  /**
-   * Lấy chi tiết một log theo ID
-   */
-  @Get(':id')
+  // ==========================================
+  // DETAIL (MUST đặt trước dynamic route nếu cần mở rộng sau)
+  // ==========================================
+  @Get('detail/:id')
   @UseAuth('ADMIN')
-  // @Roles(UserRole.ADMIN, UserRole.MANAGER)
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.stockLogService.findOne(id);
   }
 
-  /**
-   * Lấy logs theo sản phẩm (tiện ích, có thể gọi qua filter thông thường)
-   */
+  // ==========================================
+  // BY PRODUCT
+  // ==========================================
   @Get('product/:productId')
   @UseAuth('ADMIN')
   async findByProduct(
     @Param('productId', ParseIntPipe) productId: number,
     @Query() filter: FilterStockLogDto,
   ) {
-    return this.stockLogService.findAll({ ...filter, productId });
+    return this.stockLogService.findByProduct(productId, filter);
   }
 
-  /**
-   * Lấy logs theo biến thể
-   */
+  // ==========================================
+  // BY VARIANT
+  // ==========================================
   @Get('variant/:variantId')
   @UseAuth('ADMIN')
   async findByVariant(
     @Param('variantId', ParseIntPipe) variantId: number,
     @Query() filter: FilterStockLogDto,
   ) {
-    return this.stockLogService.findAll({ ...filter, variantId });
+    return this.stockLogService.findByVariant(variantId, filter);
   }
 }
